@@ -8,6 +8,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         node: [18, 20, 22, 24]
     steps:
@@ -16,7 +17,17 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
       - run: npm ci
-      - run: npm test
-      - run: npm run test:e2e
       # Guard against the test glob silently matching nothing.
       - run: test "$(ls tests/*.test.ts | wc -l)" -gt 0
+      - name: Unit, regression and ReDoS tests
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee unit.log
+      - name: End-to-end tests (real MCP server)
+        run: |
+          set -o pipefail
+          npm run test:e2e 2>&1 | tee e2e.log
+      - name: Show failing tests on the run summary
+        if: failure()
+        run: |
+          grep -h -E -A8 "^not ok|^✖|^\s+✖" unit.log e2e.log 2>/dev/null | head -80 | sed 's/^/::error::/' || true

@@ -150,10 +150,12 @@ export const DEFAULT_RULES: DetectionRule[] = [
     id: "private-key-block",
     label: "PRIVATE_KEY",
     category: "secret",
-    // Body length is bounded so many BEGIN headers without an END can't make
-    // the scan quadratic; 32 KB covers RSA-8192 and large PGP blocks.
+    // The body may not contain "-----", so the scan from each BEGIN stops at
+    // the very next marker: many BEGIN headers without an END stay linear.
+    // Real PEM / OpenSSH / PGP bodies (base64 + headers like DEK-Info) never
+    // contain five dashes. 32 KB covers RSA-8192 and large PGP blocks.
     pattern:
-      /-----BEGIN (?:RSA |EC |DSA |OPENSSH |ENCRYPTED |PGP )?PRIVATE KEY(?: BLOCK)?-----[\s\S]{0,32768}?-----END (?:RSA |EC |DSA |OPENSSH |ENCRYPTED |PGP )?PRIVATE KEY(?: BLOCK)?-----/g,
+      /-----BEGIN (?:RSA |EC |DSA |OPENSSH |ENCRYPTED |PGP )?PRIVATE KEY(?: BLOCK)?-----(?:[^-]|-(?!----)){0,32768}?-----END (?:RSA |EC |DSA |OPENSSH |ENCRYPTED |PGP )?PRIVATE KEY(?: BLOCK)?-----/g,
     quickCheck: (s) => s.includes("PRIVATE KEY") && s.includes("-----END"),
   },
 

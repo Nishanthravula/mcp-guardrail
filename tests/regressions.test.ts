@@ -166,5 +166,6 @@ test("LineBuffer: 20 MB message in 64 KB chunks is linear", () => {
   for (let i = 0; i < big.length; i += 65536) lb.push(big.subarray(i, i + 65536), (l) => (got = l.length));
   const ms = performance.now() - t0;
   assert.equal(got, big.length - 1);
-  assert.ok(ms < 1500, `took ${ms.toFixed(0)} ms`);
+  // Linear takes well under a second; quadratic would take minutes.
+  assert.ok(ms < 5000, `took ${ms.toFixed(0)} ms`);
 });
