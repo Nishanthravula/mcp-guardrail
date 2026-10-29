@@ -9,12 +9,14 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node: [18, 20, 22]
+        node: [18, 20, 22, 24]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
       - run: npm ci
-      - run: npx tsx --test tests/
-      - run: npm run build
+      - run: npm test
+      - run: npm run test:e2e
+      # Guard against the test glob silently matching nothing.
+      - run: test "$(ls tests/*.test.ts | wc -l)" -gt 0

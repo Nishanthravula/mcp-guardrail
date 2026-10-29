@@ -5,10 +5,11 @@
  *   mcp-guardrail -- npx -y @modelcontextprotocol/server-filesystem /path
  *
  * Flags (before the `--`):
- *   --both               sanitize both directions (default: responses only)
- *   --max-string <n>     truncate string values longer than n characters
- *   --disable <ids>      comma-separated rule ids to disable
- *   --quiet              suppress stderr redaction logs
+ *   --both                 also block requests that would send a secret to the server
+ *   --allow-placeholders   let requests containing "[REDACTED:...]" through (not recommended)
+ *   --max-string <n>       truncate string values longer than n characters
+ *   --disable <ids>        comma-separated rule ids to disable
+ *   --quiet                suppress stderr redaction logs
  */
 import { GuardrailProxy } from "./proxy.js";
 
@@ -21,7 +22,7 @@ const argv = process.argv.slice(2);
 const sep = argv.indexOf("--");
 if (sep === -1 || sep === argv.length - 1) {
   fail(
-    "usage: mcp-guardrail [--both] [--max-string N] [--disable id1,id2] [--quiet] -- <command> [args...]",
+    "usage: mcp-guardrail [--both] [--allow-placeholders] [--max-string N] [--disable id1,id2] [--quiet] -- <command> [args...]",
   );
 }
 
@@ -32,15 +33,20 @@ let direction: "responses" | "both" = "responses";
 let maxStringLength = 0;
 let disable: string[] = [];
 let logToStderr = true;
+let blockPlaceholders = true;
 
 for (let i = 0; i < flags.length; i++) {
   switch (flags[i]) {
     case "--both":
       direction = "both";
       break;
+    case "--allow-placeholders":
+      blockPlaceholders = false;
+      break;
     case "--max-string":
       maxStringLength = parseInt(flags[++i] ?? "", 10);
-      if (Number.isNaN(maxStringLength)) fail("--max-string requires a number");
+      if (Number.isNaN(maxStringLength) || maxStringLength < 0)
+        fail("--max-string requires a non-negative number");
       break;
     case "--disable":
       disable = (flags[++i] ?? "").split(",").filter(Boolean);
@@ -60,4 +66,5 @@ new GuardrailProxy({
   maxStringLength,
   disable,
   logToStderr,
+  blockPlaceholders,
 }).start();
