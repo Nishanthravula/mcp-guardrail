@@ -1,0 +1,49 @@
+{
+  "name": "mcp-guardrail",
+  "version": "0.1.0",
+  "description": "Zero-dependency sanitizing proxy for MCP servers — redacts secrets and PII from Model Context Protocol payloads before they reach the LLM.",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "security",
+    "secrets",
+    "redaction",
+    "pii",
+    "llm",
+    "sanitizer",
+    "proxy"
+  ],
+  "license": "MIT",
+  "author": "Tony",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "mcp-guardrail": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "tsx --test tests/",
+    "test:built": "npm run build && node --test dist-tests/",
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "filesystem-guarded": {
+      "command": "npx",
+      "args": [
+        "-y", "mcp-guardrail", "--max-string", "20000", "--",
+        "npx", "-y", "@modelcontextprotocol/server-filesystem", "/path/to/your/project"
+      ]
+    }
+  }
+}
