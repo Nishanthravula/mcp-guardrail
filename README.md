@@ -14,6 +14,10 @@ LLM host (Claude Code / Cursor / ...) ⇄ mcp-guardrail ⇄ your MCP server
 
 ## Quick start
 
+```bash
+npm install -g @nishanthravula/mcp-guardrail   # or run it with npx, as below
+```
+
 Wrap any stdio MCP server by prefixing its command:
 
 ```jsonc
@@ -23,7 +27,7 @@ Wrap any stdio MCP server by prefixing its command:
     "filesystem": {
       "command": "npx",
       "args": [
-        "-y", "mcp-guardrail", "--",
+        "-y", "@nishanthravula/mcp-guardrail", "--",
         "npx", "-y", "@modelcontextprotocol/server-filesystem", "/Users/me/projects"
       ]
     }
@@ -79,7 +83,7 @@ Every rule is tested for linear-time behavior on adversarial input (`tests/redos
 ## Library usage
 
 ```ts
-import { Sanitizer } from "mcp-guardrail";
+import { Sanitizer } from "@nishanthravula/mcp-guardrail";
 
 const sanitizer = new Sanitizer({
   maxStringLength: 20_000,
@@ -98,7 +102,7 @@ const { value, redactions } = sanitizer.sanitize(toolResult);
 Or embed the proxy programmatically:
 
 ```ts
-import { GuardrailProxy } from "mcp-guardrail";
+import { GuardrailProxy } from "@nishanthravula/mcp-guardrail";
 
 new GuardrailProxy({
   command: "npx",

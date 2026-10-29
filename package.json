@@ -1,5 +1,5 @@
 {
-  "name": "mcp-guardrail",
+  "name": "@nishanthravula/mcp-guardrail",
   "version": "0.1.0",
   "description": "Zero-dependency sanitizing proxy for MCP servers — redacts secrets and PII from Model Context Protocol payloads before they reach the LLM.",
   "keywords": [
@@ -56,5 +56,8 @@
   "homepage": "https://github.com/Nishanthravula/mcp-guardrail#readme",
   "bugs": {
     "url": "https://github.com/Nishanthravula/mcp-guardrail/issues"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
