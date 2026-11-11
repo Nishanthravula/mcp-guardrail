@@ -6,7 +6,7 @@
 | **Project** | mcp-guardrail (`@nishanthravula/mcp-guardrail`) |
 | **Author** | Nishanth Ravula |
 | **Status** | Approved |
-| **Version** | 1.0 |
+| **Version** | 1.1 |
 | **Created** | 2026-11-11 |
 | **Last updated** | 2026-11-11 |
 | **Target release** | 0.3.0 |
@@ -20,6 +20,7 @@
 | 0.1 | 2026-11-11 | N. Ravula | Initial draft of the design |
 | 0.2 | 2026-11-11 | N. Ravula | Restructured to a standard design-document template; added numbered requirements, traceability, security and privacy review, alternatives, rollout plan and open questions. No change to the technical design |
 | 1.0 | 2026-11-11 | N. Ravula | Approved to build. OQ-1 and OQ-2 closed with the recommended options |
+| 1.1 | 2026-11-11 | N. Ravula | Phase 1 built. Added section 19 recording where the implementation differs from this design, and closed OQ-3 |
 
 ## Table of Contents
 
@@ -41,6 +42,7 @@
 16. [Glossary](#16-glossary)
 17. [References](#17-references)
 18. [Approval](#18-approval)
+19. [Implementation Record](#19-implementation-record)
 
 Requirement keywords **MUST**, **MUST NOT**, **SHOULD** and **MAY** are used as
 defined in RFC 2119 [R1].
@@ -486,7 +488,7 @@ committed ones.
 |---|---|---|---|---|
 | OQ-1 | Ship the linear model in 0.3.0 before the transformer is available, or wait and ship only the transformer? | Ship the linear model first | Maintainer | Closed: recommendation adopted when the maintainer approved the build on 2026-11-11 |
 | OQ-2 | Default mode in 0.3.0: `off`, or `report`? | `off` | Maintainer | Closed: recommendation adopted when the maintainer approved the build on 2026-11-11 |
-| OQ-3 | Final list of training and evaluation datasets | Decide in the implementation plan after licence checks | Author | Open |
+| OQ-3 | Final list of training and evaluation datasets | Decide in the implementation plan after licence checks | Author | Closed: AgentDojo and InjecAgent (both MIT), local text files and synthetic training rows; see `ml/data/README.md` |
 
 ## 16. Glossary
 
@@ -519,3 +521,20 @@ committed ones.
 |---|---|---|---|
 | Author | Nishanth Ravula | Submitted for review | 2026-11-11 |
 | Approver (maintainer) | Nishanth Ravula | Approved to build | 2026-11-11 |
+
+## 19. Implementation Record
+
+Differences between this design and what phase 1 shipped, with the reason for each.
+
+| Area | Design | As built | Reason |
+|---|---|---|---|
+| Default threshold (FR-7) | The model's 1%-false-positive threshold | The larger of that threshold and 0.5, stored as `thresholds.default` | The measured 1% threshold (0.28) was too eager for text unlike the benign training data |
+| Training data (10.1) | AgentDojo, InjecAgent, benign results from real MCP servers | Those two datasets, text files read from `node_modules` as a filesystem server would return them, and synthetic rows written for the project (training only) | A first model trained on the two datasets alone scored a textbook attack at 0.40; the synthetic rows add generic phrasing and instruction-like benign text |
+| Locating injections in AgentDojo logs | Not specified | Alphanumeric-only matching with prefix and fragment rules | Tool results are often YAML, which re-wraps and re-quotes the injected text |
+| Extra benchmark splits (10.2) | Leave-one-dataset-out | Also one attack family and one AgentDojo suite held out | More detail on where the model is weak; the family rows are labelled optimistic |
+| Scored content (FR-1) | Text items and `structuredContent` strings | Also the text of embedded resources | A file returned as an embedded resource is as untrusted as one returned as text |
+| Golden vectors (11.1) | Texts including dataset samples | 520 generated texts from an own-written vocabulary | NFR-10 forbids committing dataset content |
+| Latency metric (10.3) | Reported in the benchmark | Measured in the TypeScript runtime and stated in the guide; linear scaling enforced by a test | The Python reference is not the shipped runtime |
+| Known false positive | Not anticipated | One benign security-policy paragraph and correspondence telling a person to ignore an earlier message are flagged | Documented and pinned by tests rather than tuned away on hand-written examples |
+
+Measured results are in `docs/benchmarks/RESULTS.md`. Phase 2 (section 6.1, tier 2) is not started.

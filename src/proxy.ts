@@ -452,7 +452,12 @@ export class GuardrailProxy {
     };
     if (Array.isArray(result.content)) {
       result.content.forEach((item, i) => {
-        if (isObject(item) && item.type === "text") visit(item.text, ["content", i, "text"]);
+        if (!isObject(item)) return;
+        if (item.type === "text") visit(item.text, ["content", i, "text"]);
+        // Embedded resources (e.g. a file returned alongside a summary) carry text too.
+        else if (item.type === "resource" && isObject(item.resource)) {
+          visit(item.resource.text, ["content", i, "resource", "text"]);
+        }
       });
     }
     walk(result.structuredContent, ["structuredContent"]);

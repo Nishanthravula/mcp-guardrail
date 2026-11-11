@@ -66,6 +66,33 @@ my-project/config/database.yml:5:14  SECRET  generic-assigned-secret
 
 **Watch live traffic without changing it** with `--dry-run`: everything is forwarded untouched, and stderr (plus the audit log, if enabled) reports what *would* have been redacted or blocked.
 
+## Detect prompt injection in tool results
+
+A web page, issue or file returned by a tool can contain text aimed at the model ("ignore your instructions and…"). `mcp-guardrail` can score every tool result for this and report or withhold it. Off by default; no extra install.
+
+```bash
+# report only: logs location and score, changes nothing
+npx -y @nishanthravula/mcp-guardrail --detect-injection -- <server command...>
+
+# also withhold the flagged text from the model
+npx -y @nishanthravula/mcp-guardrail --detect-injection=block -- <server command...>
+```
+
+```
+[mcp-guardrail] tools/call (fetch_url): injection suspected at result.content[0].text (score 0.97) — withheld
+```
+
+It is a small built-in classifier that runs in plain TypeScript: no dependency, no network, about 85 ms per megabyte. Measured on public attack datasets the model never saw in training:
+
+<!-- results:start -->
+| Dataset never seen in training | Attacks | Benign | Detected at 1% false positives | Detected at 0.1% | Keyword rules detect |
+|---|---|---|---|---|---|
+| InjecAgent | 2,108 | 2,737 | 67.9% | 35.1% | 50.0% |
+| AgentDojo | 6,241 | 7,596 | 90.0% | 79.6% | 5.6% |
+<!-- results:end -->
+
+It is a probabilistic extra layer, not a guarantee. It misses translated, encoded and politely indirect attacks, and it flags some emails and policy text written for people. Per-tool modes, thresholds, measured limits and how to reproduce every number: [docs/injection-detection.md](docs/injection-detection.md). Model details: [MODEL_CARD.md](MODEL_CARD.md).
+
 ## CLI
 
 ```
@@ -78,9 +105,13 @@ mcp-guardrail check-config <file>                validate a config file
   --allow-placeholders  let requests containing "[REDACTED:...]" through (not recommended)
   --max-string N        truncate any string value longer than N characters (after redaction)
   --disable id1,id2     turn off rules (e.g. --disable email,ipv4,phone)
+  --detect-injection[=report|block]
+                        flag tool results that look like prompt injections
+  --injection-threshold P  flag at or above score P (0-1)
   --dry-run             report what would be redacted or blocked; change nothing
   --audit-log <file>    append a JSONL audit log (never contains values)
   --quiet               no stderr logs
+  --injection           (scan) also report files that look like prompt injections
   --json, --no-color    scan output format
 ```
 

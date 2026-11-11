@@ -85,6 +85,12 @@ if (mode === "tools") {
         { type: "text", text: "Balance after this transaction: 1,204.55." },
       ],
     },
+    resource: {
+      content: [
+        { type: "text", text: BENIGN },
+        { type: "resource", resource: { uri: "file:///notes.md", mimeType: "text/markdown", text: INJECTION } },
+      ],
+    },
     structured: {
       content: [{ type: "text", text: `deploy key ${KEY} rotated last week` }],
       structuredContent: { summary: BENIGN, reviews: [{ author: "amy", body: INJECTION }], count: 3 },

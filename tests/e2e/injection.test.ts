@@ -90,6 +90,15 @@ test("block mode reaches strings nested in structuredContent, alongside redactio
   assert.ok(r.audit.some((e) => e.event === "redact"));
 });
 
+test("block mode covers the text of an embedded resource", async () => {
+  const r = await run(["--detect-injection=block"], [call(4, "resource")]);
+  const [text, embedded] = r.messages[0].result.content;
+  assert.match(text.text, /quarterly report/);
+  assert.match(embedded.resource.text, NOTICE);
+  assert.equal(embedded.resource.uri, "file:///notes.md");
+  assert.equal(injectionEvents(r)[0].path, "result.content[1].resource.text");
+});
+
 test("dry run changes nothing and logs would-injection", async () => {
   const r = await run(["--detect-injection=block", "--dry-run"], [call(1, "multi")]);
   assert.match(r.messages[0].result.content[1].text, new RegExp(SECRET_PHRASE));
