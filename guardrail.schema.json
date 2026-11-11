@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unpkg.com/@nishanthravula/mcp-guardrail/guardrail.schema.json",
+  "title": "mcp-guardrail config",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "both": { "type": "boolean", "description": "Also block requests that would send a secret to the server (same as --both)." },
+    "allowPlaceholders": { "type": "boolean", "description": "Let requests containing \"[REDACTED:...]\" through. Not recommended: a model could overwrite real secrets on disk." },
+    "maxStringLength": { "type": "integer", "minimum": 0, "description": "Truncate string values longer than this, after redaction. 0 = off." },
+    "disable": { "$ref": "#/$defs/ruleIds", "description": "Rule ids to turn off everywhere." },
+    "categories": {
+      "type": "array",
+      "items": { "enum": ["secret", "pii"] },
+      "uniqueItems": true,
+      "description": "Only apply rules of these categories."
+    },
+    "allow": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Exact values that are never redacted, e.g. your support address or a test card number."
+    },
+    "allowPatterns": {
+      "type": "array",
+      "items": { "type": "string", "format": "regex" },
+      "description": "Regexes that keep a detected value when they match ALL of it."
+    },
+    "rules": {
+      "type": "array",
+      "description": "Your own detection rules, applied after the built-ins.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "pattern"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+          "label": { "type": "string", "pattern": "^[A-Z0-9_]+$", "description": "Placeholder label; default is the id upper-cased." },
+          "category": { "enum": ["secret", "pii"], "default": "secret" },
+          "pattern": { "type": "string", "format": "regex", "description": "JavaScript regex source, without slashes. Keep repetition bounded." },
+          "flags": { "type": "string", "pattern": "^[imsu]*$" },
+          "group": { "type": "integer", "minimum": 1, "description": "Redact only this capture group." },
+          "minEntropy": { "type": "number", "minimum": 0, "description": "Skip matches below this Shannon entropy (bits per character)." }
+        }
+      }
+    },
+    "tools": {
+      "type": "object",
+      "description": "Per-tool policies, keyed by MCP tool name.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "skip": { "type": "boolean", "description": "Forward this tool's results untouched." },
+          "disable": { "$ref": "#/$defs/ruleIds", "description": "Rule ids to turn off for this tool only." }
+        }
+      }
+    },
+    "dryRun": { "type": "boolean", "description": "Report what would be redacted or blocked, but change nothing." },
+    "auditLog": { "type": "string", "description": "Append a JSONL audit log here (relative to this file). Never contains values." },
+    "quiet": { "type": "boolean", "description": "Suppress stderr logs." }
+  },
+  "$defs": {
+    "ruleIds": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "anyOf": [
+          {
+            "enum": [
+              "private-key-block", "aws-access-key-id", "aws-secret-access-key", "anthropic-api-key",
+              "openai-api-key", "github-token", "github-fine-grained-pat", "slack-token", "stripe-key",
+              "google-api-key", "jwt", "bearer-token", "basic-auth-header", "connection-string-password",
+              "url-token-userinfo", "generic-assigned-secret", "email", "ssn", "credit-card", "phone",
+              "ipv4", "ipv6", "sensitive-key"
+            ]
+          },
+          { "type": "string", "description": "The id of one of your custom rules." }
+        ]
+      }
+    }
+  }
+}

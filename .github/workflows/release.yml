@@ -1,0 +1,41 @@
+name: Release
+
+# Publishes to npm when a GitHub release is published, using npm trusted
+# publishing (OIDC): no npm token is stored in GitHub, and npm attaches a
+# provenance attestation linking the package to this workflow run.
+#
+# One-time setup on npmjs.com: package @nishanthravula/mcp-guardrail →
+# Settings → Trusted publishing → GitHub Actions:
+#   Organization or user: Nishanthravula   Repository: mcp-guardrail
+#   Workflow filename: release.yml         Allowed actions: npm publish
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      # Trusted publishing needs npm >= 11.5.1.
+      - run: npm install -g npm@11
+      - run: npm ci
+      - name: Release tag must match package.json version
+        run: |
+          version="v$(node -p 'require("./package.json").version')"
+          if [ "$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Release tag $GITHUB_REF_NAME does not match package.json version $version"
+            exit 1
+          fi
+      - run: npm test
+      - run: npm run test:e2e
+      - run: npm publish

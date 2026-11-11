@@ -1,6 +1,6 @@
 {
   "name": "@nishanthravula/mcp-guardrail",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Zero-dependency sanitizing proxy for MCP servers — redacts secrets and PII from Model Context Protocol payloads before they reach the LLM.",
   "keywords": [
     "mcp",
@@ -30,7 +30,9 @@
   },
   "files": [
     "dist",
+    "guardrail.schema.json",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "engines": {
@@ -44,7 +46,7 @@
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
-    "@modelcontextprotocol/server-filesystem": "^1.0.0",
+    "@modelcontextprotocol/server-filesystem": "^2.2.0",
     "@types/node": "^22.0.0",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0"

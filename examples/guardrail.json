@@ -1,0 +1,14 @@
+{
+  "$schema": "https://unpkg.com/@nishanthravula/mcp-guardrail/guardrail.schema.json",
+  "allow": ["support@acme.io", "4111 1111 1111 1111"],
+  "allowPatterns": ["10\\.0\\.\\d{1,3}\\.\\d{1,3}"],
+  "rules": [
+    { "id": "acme-api-key", "label": "ACME_API_KEY", "pattern": "acme_[A-Za-z0-9]{32}" },
+    { "id": "employee-id", "label": "EMPLOYEE_ID", "category": "pii", "pattern": "\\bEMP-\\d{6}\\b" }
+  ],
+  "tools": {
+    "read_media_file": { "skip": true },
+    "list_directory": { "disable": ["email"] }
+  },
+  "auditLog": "./guardrail-audit.jsonl"
+}

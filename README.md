@@ -48,17 +48,88 @@ Redaction summaries are logged to stderr (never the values themselves):
 [mcp-guardrail] response: redacted AWS_ACCESS_KEY_ID×1, EMAIL×3
 ```
 
-## CLI options
+## Try it before you trust it
+
+**See what it would catch in your files**, without wiring anything up:
+
+```console
+$ npx -y @nishanthravula/mcp-guardrail scan ./my-project
+my-project/.env:2:19  AWS_ACCESS_KEY_ID  aws-access-key-id
+    AWS_ACCESS_KEY_ID=[AWS_ACCESS_KEY_ID]
+my-project/config/database.yml:5:14  SECRET  generic-assigned-secret
+    password: "[SECRET]"
+
+2 finding(s) in 2 file(s); 41 file(s) scanned.
+```
+
+`scan` never prints a value, skips `node_modules`, `.git` and binary files, takes `-` for stdin, supports `--json`, and exits 1 when it finds something, so it also works as a pre-commit or CI check.
+
+**Watch live traffic without changing it** with `--dry-run`: everything is forwarded untouched, and stderr (plus the audit log, if enabled) reports what *would* have been redacted or blocked.
+
+## CLI
 
 ```
-mcp-guardrail [flags] -- <server-command> [args...]
+mcp-guardrail [options] -- <server command...>   wrap a stdio MCP server
+mcp-guardrail scan [options] <path...|->         show what would be redacted
+mcp-guardrail check-config <file>                validate a config file
 
+  --config <file>       JSON config (also: MCP_GUARDRAIL_CONFIG env var)
   --both                also block requests that would send a secret TO the server
   --allow-placeholders  let requests containing "[REDACTED:...]" through (not recommended)
   --max-string N        truncate any string value longer than N characters (after redaction)
-  --disable id1,id2     disable specific rules (e.g. --disable email,ipv4,phone)
-  --quiet               suppress stderr redaction logs
+  --disable id1,id2     turn off rules (e.g. --disable email,ipv4,phone)
+  --dry-run             report what would be redacted or blocked; change nothing
+  --audit-log <file>    append a JSONL audit log (never contains values)
+  --quiet               no stderr logs
+  --json, --no-color    scan output format
 ```
+
+Flags override the config file; `--disable` adds to the config's list.
+
+## Configuration file
+
+For anything beyond a few flags, use a JSON config. Add `$schema` for autocomplete and inline docs in VS Code and other editors:
+
+```jsonc
+{
+  "$schema": "https://unpkg.com/@nishanthravula/mcp-guardrail/guardrail.schema.json",
+
+  // Values that are never redacted (exact match), and patterns that must match the whole value
+  "allow": ["support@acme.io", "4111 1111 1111 1111"],
+  "allowPatterns": ["10\\.0\\.\\d{1,3}\\.\\d{1,3}"],
+
+  // Your own detectors, applied after the built-ins
+  "rules": [
+    { "id": "acme-api-key", "label": "ACME_API_KEY", "pattern": "acme_[A-Za-z0-9]{32}" },
+    { "id": "employee-id", "category": "pii", "pattern": "\\bEMP-\\d{6}\\b" },
+    { "id": "pin", "pattern": "PIN[=:](\\d{6})", "group": 1, "flags": "i" }
+  ],
+
+  // Per-tool policies, keyed by MCP tool name
+  "tools": {
+    "read_media_file": { "skip": true },              // images only: forward untouched
+    "list_directory": { "disable": ["email"] }        // folder names stay usable
+  },
+
+  "auditLog": "./guardrail-audit.jsonl"               // relative to this file
+}
+```
+
+The file itself is plain JSON (comments above are for illustration). Use it with `--config guardrail.json`, and check it with `mcp-guardrail check-config guardrail.json`.
+
+Validation is strict: an unknown key or rule id stops startup with a suggestion (`unknown key "dissable" (did you mean "disable"?)`), because in a security tool a typo shouldn't silently do nothing. Custom regexes are also stress-tested at startup on adversarial input; a pattern that could backtrack catastrophically (like `(a+)+$`) is rejected rather than allowed to stall every message.
+
+## Audit log
+
+`--audit-log <file>` (or `"auditLog"`) appends one JSON line per event: `start`, `redact` / `would-redact`, `block` / `would-block`, `stop`. Each redaction records the rule, the MCP tool, and the JSON path it was found at, plus a short fingerprint so you can tell one key appearing 40 times from 40 different keys:
+
+```json
+{"ts":"2026-11-11T08:12:03.114Z","event":"redact","tool":"read_text_file","id":4,
+ "redactions":{"AWS_ACCESS_KEY_ID":2},
+ "details":[{"rule":"aws-access-key-id","path":"result.content[0].text","fp":"9c41e07a2b5d13f8"}, …]}
+```
+
+The log never contains values. Fingerprints are HMACs with a random key generated per run, so they only correlate within one session and can't be used to brute-force short passwords. The file is created owner-only (`0600`), since it does reveal which files and tools carried secrets.
 
 ## Writes are protected too
 
@@ -123,9 +194,10 @@ This is **defense-in-depth, not a guarantee**. Regex + entropy detection cannot 
 
 Known trade-offs:
 
-- Redaction also applies to file *names* and paths in listings. If a folder is named after an email address, the model sees `[REDACTED:EMAIL]` and can't open it by name; the request guard tells it why.
-- Test card numbers (e.g. `4111 1111 1111 1111`) and example secrets in docs look exactly like real ones and are redacted.
-- Only the stdio transport is supported; HTTP/SSE is on the roadmap.
+- Redaction also applies to file *names* and paths in listings. If a folder is named after an email address, the model sees `[REDACTED:EMAIL]` and can't open it by name. Fix it per tool, e.g. `"tools": { "list_directory": { "disable": ["email"] } }`.
+- Test card numbers (e.g. `4111 1111 1111 1111`) and example secrets in docs look exactly like real ones and are redacted unless you add them to `allow`.
+- `--dry-run` really does forward everything, secrets included. Use it to evaluate, not in production.
+- Only the stdio transport is supported; Streamable HTTP is on the roadmap.
 
 ## Development
 
@@ -138,6 +210,8 @@ npm run build      # emits dist/
 ```
 
 Test fixtures assemble fake secrets from string pieces so GitHub push protection and other secret scanners don't flag the repository.
+
+Releases are published by GitHub Actions (`.github/workflows/release.yml`) when a GitHub release is published, using npm trusted publishing: no npm token is stored in the repository, and every version carries a provenance attestation linking it to the exact commit and workflow run.
 
 ## License
 
