@@ -5,8 +5,8 @@
 | **Document ID** | MCPG-DD-001 |
 | **Project** | mcp-guardrail (`@nishanthravula/mcp-guardrail`) |
 | **Author** | Nishanth Ravula |
-| **Status** | In Review |
-| **Version** | 0.2 (draft) |
+| **Status** | Approved |
+| **Version** | 1.0 |
 | **Created** | 2026-11-11 |
 | **Last updated** | 2026-11-11 |
 | **Target release** | 0.3.0 |
@@ -19,6 +19,7 @@
 |---|---|---|---|
 | 0.1 | 2026-11-11 | N. Ravula | Initial draft of the design |
 | 0.2 | 2026-11-11 | N. Ravula | Restructured to a standard design-document template; added numbered requirements, traceability, security and privacy review, alternatives, rollout plan and open questions. No change to the technical design |
+| 1.0 | 2026-11-11 | N. Ravula | Approved to build. OQ-1 and OQ-2 closed with the recommended options |
 
 ## Table of Contents
 
@@ -158,9 +159,9 @@ signal when a tool result contains an injection attempt.
 
 | ID | Assumption | Status |
 |---|---|---|
-| A1 | The feature ships inside the existing package rather than as a separate package | Pending approval |
-| A2 | Detection is off by default in 0.3.0 | Pending approval (see OQ-2) |
-| A3 | Users accept a baseline model in 0.3.0 with the stronger model following | Pending approval (see OQ-1) |
+| A1 | The feature ships inside the existing package rather than as a separate package | Accepted |
+| A2 | Detection is off by default in 0.3.0 | Accepted (see OQ-2) |
+| A3 | Users accept a baseline model in 0.3.0 with the stronger model following | Accepted (see OQ-1) |
 
 ### 5.2 Constraints
 
@@ -483,8 +484,8 @@ committed ones.
 
 | ID | Question | Recommendation | Owner | Status |
 |---|---|---|---|---|
-| OQ-1 | Ship the linear model in 0.3.0 before the transformer is available, or wait and ship only the transformer? | Ship the linear model first | Maintainer | Open |
-| OQ-2 | Default mode in 0.3.0: `off`, or `report`? | `off` | Maintainer | Open |
+| OQ-1 | Ship the linear model in 0.3.0 before the transformer is available, or wait and ship only the transformer? | Ship the linear model first | Maintainer | Closed: recommendation adopted when the maintainer approved the build on 2026-11-11 |
+| OQ-2 | Default mode in 0.3.0: `off`, or `report`? | `off` | Maintainer | Closed: recommendation adopted when the maintainer approved the build on 2026-11-11 |
 | OQ-3 | Final list of training and evaluation datasets | Decide in the implementation plan after licence checks | Author | Open |
 
 ## 16. Glossary
@@ -517,4 +518,4 @@ committed ones.
 | Role | Name | Decision | Date |
 |---|---|---|---|
 | Author | Nishanth Ravula | Submitted for review | 2026-11-11 |
-| Approver (maintainer) | Nishanth Ravula | Pending | |
+| Approver (maintainer) | Nishanth Ravula | Approved to build | 2026-11-11 |
