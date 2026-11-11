@@ -30,6 +30,7 @@
   },
   "files": [
     "dist",
+    "models",
     "guardrail.schema.json",
     "README.md",
     "CHANGELOG.md",
