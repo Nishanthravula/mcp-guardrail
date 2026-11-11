@@ -16,7 +16,9 @@ export {
   findSlowRules,
   ConfigError,
 } from "./config.js";
-export type { GuardrailConfig, CustomRuleConfig, ToolPolicy } from "./config.js";
+export type { GuardrailConfig, CustomRuleConfig, ToolPolicy, InjectionConfig, InjectionMode } from "./config.js";
+export { InjectionDetector } from "./injection/detector.js";
+export type { InjectionResult, InjectionDetectorOptions } from "./injection/detector.js";
 export { scanText, scanPaths } from "./scan.js";
 export type { ScanFinding, ScanReport } from "./scan.js";
 export {

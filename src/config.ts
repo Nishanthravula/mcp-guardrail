@@ -24,9 +24,22 @@ export interface CustomRuleConfig {
   minEntropy?: number;
 }
 
+/** What to do with a tool result that looks like a prompt injection. */
+export type InjectionMode = "off" | "report" | "block";
+export const INJECTION_MODES: readonly InjectionMode[] = ["off", "report", "block"];
+
+export interface InjectionConfig {
+  /** "report" logs suspected injections; "block" also withholds the flagged text. Default "off". */
+  mode?: InjectionMode;
+  /** Flag results scoring at or above this value (0–1). Defaults to the model's own threshold. */
+  threshold?: number;
+}
+
 export interface ToolPolicy {
   /** Forward this tool's results untouched (e.g. a tool that only returns images). */
   skip?: boolean;
+  /** Injection detection mode for this tool only; overrides the global mode. */
+  injection?: InjectionMode;
   /** Rule ids to turn off for this tool's results only. */
   disable?: string[];
 }
@@ -50,6 +63,8 @@ export interface GuardrailConfig {
   rules?: CustomRuleConfig[];
   /** Per-tool policies, keyed by MCP tool name. */
   tools?: Record<string, ToolPolicy>;
+  /** Detect prompt injections in tool results. */
+  injection?: InjectionConfig;
   /** Report what would be redacted or blocked, but change nothing. */
   dryRun?: boolean;
   /** Append a JSONL audit log here (relative to the config file). */
@@ -62,10 +77,11 @@ export class ConfigError extends Error {}
 
 const TOP_KEYS = new Set([
   "$schema", "both", "allowPlaceholders", "maxStringLength", "disable", "categories",
-  "allow", "allowPatterns", "rules", "tools", "dryRun", "auditLog", "quiet",
+  "allow", "allowPatterns", "rules", "tools", "dryRun", "auditLog", "quiet", "injection",
 ]);
 const RULE_KEYS = new Set(["id", "label", "category", "pattern", "flags", "group", "minEntropy"]);
-const TOOL_KEYS = new Set(["skip", "disable"]);
+const TOOL_KEYS = new Set(["skip", "disable", "injection"]);
+const INJECTION_KEYS = new Set(["mode", "threshold"]);
 
 const isObj = (v: unknown): v is Record<string, unknown> =>
   v !== null && typeof v === "object" && !Array.isArray(v);
@@ -103,6 +119,17 @@ function expect(cond: boolean, msg: string): asserts cond {
 }
 
 const isStrArray = (v: unknown): v is string[] => Array.isArray(v) && v.every((x) => typeof x === "string");
+
+function checkInjectionMode(v: unknown, where: string): void {
+  if (v === undefined || (INJECTION_MODES as readonly unknown[]).includes(v)) return;
+  const hint = typeof v === "string" ? closest(v, INJECTION_MODES) : null;
+  throw new ConfigError(
+    `${where} must be "off", "report" or "block"${hint ? ` (did you mean "${hint}"?)` : ""}`,
+  );
+}
+
+/** A usable injection threshold: a number strictly between 0 and 1. */
+export const isThreshold = (v: unknown): v is number => typeof v === "number" && v > 0 && v < 1;
 
 /** Parse and validate a config object. Throws ConfigError with a precise message. */
 export function validateConfig(raw: unknown, source = "config"): GuardrailConfig {
@@ -186,6 +213,18 @@ export function validateConfig(raw: unknown, source = "config"): GuardrailConfig
     expect(p.skip === undefined || typeof p.skip === "boolean", `${where}: "skip" must be true or false`);
     expect(p.disable === undefined || isStrArray(p.disable), `${where}: "disable" must be an array of strings`);
     checkDisable(p.disable, `${where}.disable`);
+    checkInjectionMode(p.injection, `${where}: "injection"`);
+  }
+
+  if (c.injection !== undefined) {
+    const where = `${source}: injection`;
+    expect(isObj(c.injection), `${where} must be an object`);
+    checkKeys(c.injection, INJECTION_KEYS, where);
+    checkInjectionMode(c.injection.mode, `${where}: "mode"`);
+    expect(
+      c.injection.threshold === undefined || isThreshold(c.injection.threshold),
+      `${where}: "threshold" must be a number between 0 and 1 (exclusive)`,
+    );
   }
   return c;
 }

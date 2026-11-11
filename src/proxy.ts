@@ -2,7 +2,8 @@ import { spawn, ChildProcess } from "node:child_process";
 import { constants as osConstants } from "node:os";
 import { Sanitizer, SanitizerOptions, RedactionDetail } from "./sanitizer.js";
 import { AuditLog } from "./audit.js";
-import type { ToolPolicy } from "./config.js";
+import type { InjectionMode, ToolPolicy } from "./config.js";
+import { InjectionDetector } from "./injection/detector.js";
 import { VERSION } from "./version.js";
 
 export interface ProxyOptions extends SanitizerOptions {
@@ -31,6 +32,8 @@ export interface ProxyOptions extends SanitizerOptions {
   shutdownGraceMs?: number;
   /** Per-tool policies, keyed by MCP tool name. */
   tools?: Record<string, ToolPolicy>;
+  /** Detect prompt injections in tool results. Off unless a mode is given here or per tool. */
+  injection?: { mode: InjectionMode; threshold?: number };
   /**
    * Report what would be redacted or blocked, but forward everything
    * unchanged. For trying the guardrail out before trusting it.
@@ -105,6 +108,7 @@ export class GuardrailProxy {
   private placeholderPrefix: string;
   private pendingTools = new Map<string, string>();
   private audit: AuditLog | null;
+  private detector: InjectionDetector | null = null;
 
   constructor(options: ProxyOptions) {
     this.opts = {
@@ -120,6 +124,12 @@ export class GuardrailProxy {
       fingerprint: this.audit?.fingerprint ?? options.fingerprint,
     };
     this.sanitizer = new Sanitizer(base);
+    // Load the model only when some tool can use it, and fail at startup, not
+    // mid-session, if it is missing or corrupted.
+    const modes = [options.injection?.mode, ...Object.values(options.tools ?? {}).map((p) => p.injection)];
+    if (modes.some((m) => m === "report" || m === "block")) {
+      this.detector = new InjectionDetector({ threshold: options.injection?.threshold });
+    }
     for (const [name, policy] of Object.entries(options.tools ?? {})) {
       if (!policy.skip && policy.disable?.length) {
         this.toolSanitizers.set(
@@ -371,11 +381,19 @@ export class GuardrailProxy {
     const body: JsonObject = {};
     for (const [k, v] of Object.entries(m)) if (!ENVELOPE_KEYS.has(k)) body[k] = v;
     const { value, redactions, details, truncated } = sanitizer.sanitize(body);
-    if (redactions.length === 0 && truncated === 0) return m;
+    const redacted = redactions.length > 0 || truncated > 0;
+    // Injection screening runs on the redacted text, so it never sees a secret.
+    let clean: JsonObject = redacted ? value : body;
+    const mode = tool ? (policy?.injection ?? this.opts.injection?.mode ?? "off") : "off";
+    if (tool && mode !== "off" && this.detector && isObject(clean.result)) {
+      const screened = this.screenResult(clean.result, tool, m.id, mode);
+      if (screened !== clean.result) clean = { ...clean, result: screened };
+    }
+    if (!redacted && clean === body) return m;
 
     const method = typeof m.method === "string" ? m.method : undefined;
     const where = method ?? (tool ? `tools/call (${tool})` : "response");
-    this.log(
+    if (redacted) this.log(
       `${where}: ${this.opts.dryRun ? "would redact" : "redacted"} ${summary(redactions)}` +
         (truncated ? `, truncated ${truncated} value(s)` : ""),
     );
@@ -390,8 +408,70 @@ export class GuardrailProxy {
       });
     }
     const out: JsonObject = {};
-    for (const k of Object.keys(m)) out[k] = ENVELOPE_KEYS.has(k) ? m[k] : value[k];
+    for (const k of Object.keys(m)) out[k] = ENVELOPE_KEYS.has(k) ? m[k] : clean[k];
     return out;
+  }
+
+  /**
+   * Score every text item of a tool result. Logs each suspected injection
+   * (location and score only, never the text) and, in block mode, returns a
+   * copy with the flagged items replaced by a notice. Returns `result` itself
+   * when nothing is withheld.
+   */
+  private screenResult(result: JsonObject, tool: string, id: unknown, mode: "report" | "block"): JsonObject {
+    const detector = this.detector!;
+    const flagged: { keys: (string | number)[]; score: number }[] = [];
+    const visit = (text: unknown, keys: (string | number)[]) => {
+      if (typeof text !== "string" || text === "") return;
+      const r = detector.score(text);
+      if (!r.flagged) return;
+      flagged.push({ keys, score: r.score });
+      const path = "result" + keys.map((k) => (typeof k === "number" ? `[${k}]` : `.${k}`)).join("");
+      const shown = r.score.toFixed(2);
+      const withhold = mode === "block";
+      this.log(
+        `tools/call (${tool}): injection suspected at ${path} (score ${shown})` +
+          (withhold ? (this.opts.dryRun ? " — would withhold" : " — withheld") : ""),
+      );
+      this.audit?.write({
+        event: this.opts.dryRun ? "would-injection" : "injection",
+        tool,
+        id: id as string | number | undefined,
+        path,
+        score: Math.round(r.score * 1000) / 1000,
+        threshold: detector.threshold,
+        model: detector.modelName,
+        action: mode,
+        truncated: r.truncated,
+      });
+    };
+    const walk = (v: unknown, keys: (string | number)[]) => {
+      if (typeof v === "string") visit(v, keys);
+      else if (Array.isArray(v)) v.forEach((x, i) => walk(x, [...keys, i]));
+      else if (isObject(v)) for (const [k, x] of Object.entries(v)) walk(x, [...keys, k]);
+    };
+    if (Array.isArray(result.content)) {
+      result.content.forEach((item, i) => {
+        if (!isObject(item)) return;
+        if (item.type === "text") visit(item.text, ["content", i, "text"]);
+        // Embedded resources (e.g. a file returned alongside a summary) carry text too.
+        else if (item.type === "resource" && isObject(item.resource)) {
+          visit(item.resource.text, ["content", i, "resource", "text"]);
+        }
+      });
+    }
+    walk(result.structuredContent, ["structuredContent"]);
+
+    if (mode !== "block" || this.opts.dryRun || flagged.length === 0) return result;
+    const copy = structuredClone(result);
+    for (const { keys, score } of flagged) {
+      let node: any = copy;
+      for (const k of keys.slice(0, -1)) node = node[k];
+      node[keys[keys.length - 1]] =
+        `[mcp-guardrail: withheld — this tool result looks like a prompt injection (score ${score.toFixed(2)}). ` +
+        "Run with --dry-run to inspect.]";
+    }
+    return copy;
   }
 }
 

@@ -27,7 +27,20 @@ jobs:
         run: |
           set -o pipefail
           npm run test:e2e 2>&1 | tee e2e.log
+      - name: Release checks (no dependencies, model size, documented numbers match results)
+        run: npm run check:release
       - name: Show failing tests on the run summary
         if: failure()
         run: |
           grep -h -E -A8 "^not ok|^✖|^\s+✖" unit.log e2e.log 2>/dev/null | head -80 | sed 's/^/::error::/' || true
+
+  ml:
+    # Training and evaluation code. Does not download datasets.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r ml/requirements.txt
+      - run: python -m pytest ml -q

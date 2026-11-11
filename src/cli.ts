@@ -12,12 +12,15 @@ import { DEFAULT_RULES } from "./patterns.js";
 import {
   ConfigError,
   GuardrailConfig,
+  InjectionMode,
   compileRules,
+  isThreshold,
   findSlowRules,
   loadConfig,
   validateConfig,
 } from "./config.js";
 import { scanPaths, formatReport } from "./scan.js";
+import { InjectionDetector } from "./injection/detector.js";
 import { VERSION } from "./version.js";
 
 const HELP = `mcp-guardrail ${VERSION} — redact secrets and PII from MCP traffic
@@ -33,12 +36,19 @@ Proxy options:
   --allow-placeholders   let requests containing "[REDACTED:...]" through (not recommended)
   --max-string <n>       truncate string values longer than n characters (after redaction)
   --disable <ids>        comma-separated rule ids to turn off (e.g. email,phone)
+  --detect-injection[=report|block]
+                         flag tool results that look like prompt injections; "block"
+                         also withholds the flagged text (default: report)
+  --injection-threshold <p>
+                         flag at or above this score, 0–1 (default: the model's own)
   --dry-run              report what would be redacted or blocked; change nothing
   --audit-log <file>     append a JSONL audit log (never contains values)
   --quiet                no stderr logs
 
 Scan options:
   --config <file>, --disable <ids>
+  --injection            also report files that look like prompt injections
+  --injection-threshold <p>
   --json                 machine-readable output
   --no-color             plain output
   Exits 1 when anything is found, 0 when clean, 2 on error.
@@ -61,6 +71,8 @@ interface Flags {
   dryRun?: boolean;
   auditLog?: string;
   quiet?: boolean;
+  injectionMode?: InjectionMode;
+  injectionThreshold?: number;
   json?: boolean;
   color?: boolean;
   positional: string[];
@@ -77,6 +89,13 @@ function parseFlags(args: string[], mode: "proxy" | "scan"): Flags {
     const a = args[i];
     const proxyOnly = () => mode === "proxy" || fail(`${a} is not a scan option`);
     const scanOnly = () => mode === "scan" || fail(`${a} only applies to scan`);
+    if (a.startsWith("--detect-injection=")) {
+      proxyOnly();
+      const m = a.slice("--detect-injection=".length);
+      if (m !== "report" && m !== "block") fail(`--detect-injection must be "report" or "block", got "${m}"`);
+      f.injectionMode = m;
+      continue;
+    }
     switch (a) {
       case "--config": f.config = value(++i, a); break;
       case "--disable": f.disable.push(...value(++i, a).split(",").filter(Boolean)); break;
@@ -87,6 +106,14 @@ function parseFlags(args: string[], mode: "proxy" | "scan"): Flags {
         const n = Number(value(++i, a));
         if (!Number.isInteger(n) || n < 0) fail("--max-string requires a non-negative integer");
         f.maxString = n;
+        break;
+      }
+      case "--detect-injection": proxyOnly(); f.injectionMode = "report"; break;
+      case "--injection": scanOnly(); f.injectionMode = "report"; break;
+      case "--injection-threshold": {
+        const p = Number(value(++i, a));
+        if (!isThreshold(p)) fail("--injection-threshold requires a number between 0 and 1 (exclusive)");
+        f.injectionThreshold = p;
         break;
       }
       case "--dry-run": proxyOnly(); f.dryRun = true; break;
@@ -132,6 +159,13 @@ async function resolveConfig(f: Flags): Promise<GuardrailConfig> {
     dryRun: f.dryRun ?? cfg.dryRun,
     auditLog: f.auditLog ?? cfg.auditLog,
     quiet: f.quiet ?? cfg.quiet,
+    injection:
+      f.injectionMode !== undefined || f.injectionThreshold !== undefined || cfg.injection
+        ? {
+            mode: f.injectionMode ?? cfg.injection?.mode,
+            threshold: f.injectionThreshold ?? cfg.injection?.threshold,
+          }
+        : undefined,
   };
 }
 
@@ -165,6 +199,9 @@ async function main(argv: string[]): Promise<void> {
         `  active rules: ${rules.length} (${(cfg.rules ?? []).length} custom)\n` +
         `  allowlist: ${(cfg.allow ?? []).length} value(s), ${(cfg.allowPatterns ?? []).length} pattern(s)\n` +
         `  tool policies: ${Object.keys(cfg.tools ?? {}).join(", ") || "none"}\n` +
+        `  injection detection: ${cfg.injection?.mode ?? "off"}` +
+        (cfg.injection?.threshold !== undefined ? ` (threshold ${cfg.injection.threshold})` : "") +
+        "\n" +
         (cfg.dryRun ? "  dry run: ON (nothing will be redacted)\n" : "") +
         (cfg.auditLog ? `  audit log: ${cfg.auditLog}\n` : ""),
     );
@@ -175,7 +212,8 @@ async function main(argv: string[]): Promise<void> {
     const f = parseFlags(argv.slice(1), "scan");
     if (f.positional.length === 0) fail("usage: mcp-guardrail scan [options] <path...|->");
     const cfg = await resolveConfig(f);
-    const report = scanPaths(new Sanitizer(sanitizerOptions(cfg)), f.positional);
+    const detector = f.injectionMode ? new InjectionDetector({ threshold: cfg.injection?.threshold }) : undefined;
+    const report = scanPaths(new Sanitizer(sanitizerOptions(cfg)), f.positional, undefined, detector);
     if (f.json) process.stdout.write(JSON.stringify(report, null, 2) + "\n");
     else process.stdout.write(formatReport(report, f.color ?? process.stdout.isTTY === true) + "\n");
     process.exitCode = report.findings.length > 0 ? 1 : 0;
@@ -197,6 +235,7 @@ async function main(argv: string[]): Promise<void> {
     blockPlaceholders: !cfg.allowPlaceholders,
     logToStderr: !cfg.quiet,
     tools: cfg.tools,
+    injection: cfg.injection?.mode ? { mode: cfg.injection.mode, threshold: cfg.injection.threshold } : undefined,
     dryRun: cfg.dryRun,
     auditLog: cfg.auditLog,
   };

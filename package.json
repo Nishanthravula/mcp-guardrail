@@ -1,7 +1,7 @@
 {
   "name": "@nishanthravula/mcp-guardrail",
-  "version": "0.2.0",
-  "description": "Zero-dependency sanitizing proxy for MCP servers — redacts secrets and PII from Model Context Protocol payloads before they reach the LLM.",
+  "version": "0.3.0",
+  "description": "Zero-dependency sanitizing proxy for MCP servers — redacts secrets and PII from Model Context Protocol payloads, and flags prompt injections in tool results, before they reach the LLM.",
   "keywords": [
     "mcp",
     "model-context-protocol",
@@ -11,7 +11,9 @@
     "pii",
     "llm",
     "sanitizer",
-    "proxy"
+    "proxy",
+    "prompt-injection",
+    "guardrails"
   ],
   "license": "MIT",
   "author": "Nishanth Ravula",
@@ -30,6 +32,7 @@
   },
   "files": [
     "dist",
+    "models",
     "guardrail.schema.json",
     "README.md",
     "CHANGELOG.md",
@@ -42,7 +45,8 @@
     "build": "tsc -p tsconfig.json",
     "test": "tsx --test tests/*.test.ts",
     "test:e2e": "npm run build && tsx --test tests/e2e/*.test.ts",
-    "prepublishOnly": "npm run build && npm test"
+    "prepublishOnly": "npm run build && npm test",
+    "check:release": "node scripts/check-release.mjs"
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",

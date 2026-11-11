@@ -27,6 +27,18 @@ export type AuditEvent =
       reason: "placeholder" | "secret";
       labels?: string[];
     }
+  | {
+      /** A tool result that looks like a prompt injection. Never contains the text. */
+      event: "injection" | "would-injection";
+      tool?: string;
+      id?: string | number;
+      path: string;
+      score: number;
+      threshold: number;
+      model: string;
+      action: "report" | "block";
+      truncated: boolean;
+    }
   | { event: "stop"; exitCode: number };
 
 export class AuditLog {
