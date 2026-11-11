@@ -136,3 +136,28 @@ test("guardrail.schema.json lists exactly the built-in rule ids", () => {
   const listed = schema.$defs.ruleIds.items.anyOf[0].enum;
   assert.deepEqual(listed, [...DEFAULT_RULES.map((r) => r.id), "sensitive-key"]);
 });
+
+// ---------------------------------------------------------------- injection detection
+
+test("injection: a valid block and per-tool modes are accepted", () => {
+  const cfg = validateConfig({
+    injection: { mode: "block", threshold: 0.8 },
+    tools: { read_text_file: { injection: "report" }, list_directory: { injection: "off" } },
+  });
+  assert.deepEqual(cfg.injection, { mode: "block", threshold: 0.8 });
+  assert.equal(cfg.tools?.read_text_file.injection, "report");
+});
+
+test("injection: unknown modes and keys are rejected with a suggestion", () => {
+  assert.throws(() => validateConfig({ injection: { mode: "blok" } }), /injection.*"mode".*did you mean "block"/s);
+  assert.throws(() => validateConfig({ injection: { mod: "block" } }), /unknown key "mod" \(did you mean "mode"\?\)/);
+  assert.throws(() => validateConfig({ injektion: { mode: "block" } }), /did you mean "injection"/);
+  assert.throws(() => validateConfig({ tools: { t: { injection: "on" } } }), /tools\["t"\].*"injection"/s);
+});
+
+test("injection: threshold must be strictly between 0 and 1", () => {
+  for (const threshold of [0, 1, 1.5, -0.1, "0.5", NaN]) {
+    assert.throws(() => validateConfig({ injection: { mode: "report", threshold } }), /"threshold"/, String(threshold));
+  }
+  assert.equal(validateConfig({ injection: { threshold: 0.99 } }).injection?.threshold, 0.99);
+});

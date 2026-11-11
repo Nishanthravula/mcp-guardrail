@@ -5,6 +5,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { Sanitizer } from "./sanitizer.js";
+import type { InjectionDetector } from "./injection/detector.js";
 
 export interface ScanFinding {
   file: string;
@@ -12,7 +13,7 @@ export interface ScanFinding {
   column: number;
   ruleId: string;
   label: string;
-  category: "secret" | "pii";
+  category: "secret" | "pii" | "injection";
   /** The line with every finding on it replaced by its placeholder. */
   context: string;
 }
@@ -27,10 +28,33 @@ const SKIP_DIRS = new Set([".git", "node_modules", ".hg", ".svn"]);
 const MAX_BYTES = 10 * 1024 * 1024;
 const CONTEXT_WIDTH = 160;
 
-/** Scan a string as if it were a file called `name`. */
-export function scanText(sanitizer: Sanitizer, text: string, name: string): ScanFinding[] {
+/**
+ * Scan a string as if it were a file called `name`. With a `detector`, text
+ * that looks like a prompt injection adds one file-level finding.
+ */
+export function scanText(
+  sanitizer: Sanitizer,
+  text: string,
+  name: string,
+  detector?: InjectionDetector,
+): ScanFinding[] {
+  const injection: ScanFinding[] = [];
+  if (detector) {
+    const r = detector.score(text);
+    if (r.flagged) {
+      injection.push({
+        file: name,
+        line: 1,
+        column: 1,
+        ruleId: "prompt-injection",
+        label: "INJECTION",
+        category: "injection",
+        context: `looks like a prompt injection (score ${r.score.toFixed(2)})`,
+      });
+    }
+  }
   const found = sanitizer.findings(text);
-  if (found.length === 0) return [];
+  if (found.length === 0) return injection;
 
   const lineStarts = [0];
   for (let i = text.indexOf("\n"); i !== -1; i = text.indexOf("\n", i + 1)) lineStarts.push(i + 1);
@@ -71,7 +95,7 @@ export function scanText(sanitizer: Sanitizer, text: string, name: string): Scan
     return (from > 0 ? "…" : "") + s.slice(from, from + CONTEXT_WIDTH).trim() + (from + CONTEXT_WIDTH < s.length ? "…" : "");
   };
 
-  return found.map((f) => {
+  const secrets = found.map((f): ScanFinding => {
     const li = lineOf(f.start);
     // Column in characters (1-based) on the original line.
     return {
@@ -84,6 +108,7 @@ export function scanText(sanitizer: Sanitizer, text: string, name: string): Scan
       context: contextFor(li, f.start),
     };
   });
+  return [...secrets, ...injection];
 }
 
 function* walk(target: string, skipped: ScanReport["skipped"]): Generator<string> {
@@ -107,12 +132,17 @@ function* walk(target: string, skipped: ScanReport["skipped"]): Generator<string
 }
 
 /** Scan files and folders (recursively). "-" reads stdin. */
-export function scanPaths(sanitizer: Sanitizer, targets: string[], stdin?: () => string): ScanReport {
+export function scanPaths(
+  sanitizer: Sanitizer,
+  targets: string[],
+  stdin?: () => string,
+  detector?: InjectionDetector,
+): ScanReport {
   const report: ScanReport = { findings: [], filesScanned: 0, skipped: [] };
   for (const t of targets) {
     if (t === "-") {
       report.filesScanned++;
-      report.findings.push(...scanText(sanitizer, stdin ? stdin() : fs.readFileSync(0, "utf8"), "<stdin>"));
+      report.findings.push(...scanText(sanitizer, stdin ? stdin() : fs.readFileSync(0, "utf8"), "<stdin>", detector));
       continue;
     }
     for (const file of walk(t, report.skipped)) {
@@ -127,7 +157,7 @@ export function scanPaths(sanitizer: Sanitizer, targets: string[], stdin?: () =>
         continue;
       }
       report.filesScanned++;
-      report.findings.push(...scanText(sanitizer, buf.toString("utf8"), file));
+      report.findings.push(...scanText(sanitizer, buf.toString("utf8"), file, detector));
     }
   }
   return report;
