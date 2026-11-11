@@ -24,9 +24,9 @@ BIGRAM_PREFIX = 0x12
 
 _TAG_BASE = 0xE0000
 _DELETE = re.compile(
-    "[­​-‏‪-‮⁠-⁤﻿\U000E0000-\U000E007F]"
+    "[\u00ad\u200b-\u200f\u202a-\u202e\u2060-\u2064\ufeff\U000E0000-\U000E007F]"
 )
-_SPACE = re.compile("[ \t\n\r\f\v   ]+")
+_SPACE = re.compile("[ \t\n\r\f\v\u00a0\u2028\u2029]+")
 _ASCII_LOWER = {c: c + 32 for c in range(ord("A"), ord("Z") + 1)}
 _TAG_TO_ASCII = {cp: cp - _TAG_BASE for cp in range(0xE0020, 0xE007F)}
 _TOKEN = re.compile(rb"[a-z0-9\x80-\xff]+")

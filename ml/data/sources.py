@@ -214,7 +214,11 @@ def fetch(cache: Path) -> dict[str, Path]:
 
 def build(cache: Path, node_modules: Path) -> list[Row]:
     paths = fetch(cache)
-    return dedupe(load_agentdojo(paths["agentdojo"]) + load_injecagent(paths["injecagent"]) + load_local(node_modules))
+    from ml.data.synthetic import generate
+
+    return dedupe(
+        load_agentdojo(paths["agentdojo"]) + load_injecagent(paths["injecagent"]) + load_local(node_modules) + generate()
+    )
 
 
 def read_jsonl(path: Path) -> list[Row]:

@@ -11,11 +11,12 @@ their code is executed: they are read as JSON and text only.
 | [AgentDojo](https://github.com/ethz-spylab/agentdojo) `runs/` logs | `089ed468cf3ed0322acc66b0211f26d9d90dbf60` | MIT | Real tool results from logged agent runs. A result is an attack if it contains a string from that run's `injections` map; every other tool result is benign |
 | [InjecAgent](https://github.com/uiuc-kang-lab/InjecAgent) `data/` | `f19c9f2c79a41046eb13c03c51a24c567a8ffa07` | MIT | Attacks: `Tool Response` of the base and enhanced test cases. Benign: `attacker_simulated_responses.json` |
 | Local text files | pinned by `package-lock.json` | per package | Benign only: up to 40 `.md`, `.json`, `.ts` and `.js` files per package under `node_modules/`, each cut to 20,000 characters, as a filesystem MCP server would return them |
+| Synthetic (`ml/data/synthetic.py`) | this repository | MIT | Training only. Attacks: 30 generic openers combined with 30 actions, placed in 10 kinds of carrier text. Benign: instruction-like sentences addressed to people, and sentences that describe injection attacks. Never used as test data |
 
 ## Row schema
 
 `id`, `text` (normalised), `label` (1 = attack), `source`, `group` (AgentDojo
-suite, InjecAgent user tool, or package name), `attack` (attack type, or empty),
+suite, InjecAgent user tool, package name, or synthetic template group), `attack` (attack type, or empty),
 `spans` (byte offsets of each injection in the normalised UTF-8 text).
 
 Rows are de-duplicated on the normalised text.
@@ -27,7 +28,8 @@ Rows are de-duplicated on the normalised text.
 | AgentDojo | 6,241 | 7,061 | 4 suites |
 | InjecAgent | 2,108 | 2,202 | 48 tools |
 | Local | 0 | 1,033 | 105 packages |
-| **Total** | **8,349** | **10,296** | |
+| Synthetic | 3,300 | 2,400 | 30 openers, 12 benign groups |
+| **Total** | **11,649** | **12,696** | |
 
 AgentDojo attack types: `important_instructions` and its five variants (3,658),
 `ignore_previous` (861), `direct` (851), `injecagent` (351), `tool_knowledge`
@@ -49,3 +51,5 @@ left out.
 - AgentDojo and InjecAgent injections are template-generated English text.
 - The local benign set is developer documentation and source code; it does not
   cover web pages, email or chat.
+- The synthetic rows were written by the project author, so they share one
+  person's idea of what an injection looks like.

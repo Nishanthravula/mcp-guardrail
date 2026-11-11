@@ -23,11 +23,11 @@ def test_normalize_fullwidth_letters_fold_to_ascii():
 
 
 def test_normalize_removes_zero_width_characters():
-    assert normalize("ig​nore﻿") == "ignore"
+    assert normalize("ig\u200bnore\ufeff") == "ignore"
 
 
 def test_normalize_collapses_whitespace_and_trims():
-    assert normalize("  A\n\n\tB  C ") == "a b c"
+    assert normalize("  A\n\n\tB\u00a0\u2028C ") == "a b c"
 
 
 def test_normalize_reveals_tag_characters():

@@ -1,0 +1,190 @@
+{
+  "model": "injection-linear-v1",
+  "data": {
+    "agentdojo": "089ed468cf3ed0322acc66b0211f26d9d90dbf60",
+    "injecagent": "f19c9f2c79a41046eb13c03c51a24c567a8ffa07"
+  },
+  "rows": 24345,
+  "protocols": [
+    {
+      "name": "lodo/injecagent",
+      "train_rows": 19500,
+      "test_pos": 2108,
+      "test_neg": 2737,
+      "linear": {
+        "tpr_fpr1": 0.6793168880455408,
+        "tpr_fpr01": 0.3510436432637571,
+        "auroc": 0.9637900123336192
+      },
+      "regex": {
+        "tpr": 0.5,
+        "fpr": 0.0
+      }
+    },
+    {
+      "name": "lodo/agentdojo",
+      "train_rows": 10508,
+      "test_pos": 6241,
+      "test_neg": 7596,
+      "linear": {
+        "tpr_fpr1": 0.9001762538054799,
+        "tpr_fpr01": 0.7961865085723442,
+        "auroc": 0.9893880784960147
+      },
+      "regex": {
+        "tpr": 0.05624098702131069,
+        "fpr": 0.0
+      }
+    },
+    {
+      "name": "attack/direct",
+      "train_rows": 17243,
+      "test_pos": 851,
+      "test_neg": 1941,
+      "linear": {
+        "tpr_fpr1": 0.9694477085781433,
+        "tpr_fpr01": 0.7438307873090482,
+        "auroc": 0.9984277671933072
+      },
+      "regex": {
+        "tpr": 0.0,
+        "fpr": 0.0
+      }
+    },
+    {
+      "name": "attack/dos",
+      "train_rows": 17918,
+      "test_pos": 176,
+      "test_neg": 1941,
+      "linear": {
+        "tpr_fpr1": 1.0,
+        "tpr_fpr01": 0.9772727272727273,
+        "auroc": 0.9999326729427193
+      },
+      "regex": {
+        "tpr": 0.0,
+        "fpr": 0.0
+      }
+    },
+    {
+      "name": "attack/ignore_previous",
+      "train_rows": 17233,
+      "test_pos": 861,
+      "test_neg": 1941,
+      "linear": {
+        "tpr_fpr1": 1.0,
+        "tpr_fpr01": 0.9907084785133565,
+        "auroc": 0.9999844423262073
+      },
+      "regex": {
+        "tpr": 0.0,
+        "fpr": 0.0
+      }
+    },
+    {
+      "name": "attack/important_instructions",
+      "train_rows": 14436,
+      "test_pos": 3658,
+      "test_neg": 1941,
+      "linear": {
+        "tpr_fpr1": 1.0,
+        "tpr_fpr01": 0.996172772006561,
+        "auroc": 0.9999911269830136
+      },
+      "regex": {
+        "tpr": 0.0,
+        "fpr": 0.0
+      }
+    },
+    {
+      "name": "attack/injecagent",
+      "train_rows": 17743,
+      "test_pos": 351,
+      "test_neg": 1941,
+      "linear": {
+        "tpr_fpr1": 1.0,
+        "tpr_fpr01": 1.0,
+        "auroc": 1.0
+      },
+      "regex": {
+        "tpr": 1.0,
+        "fpr": 0.0
+      }
+    },
+    {
+      "name": "attack/tool_knowledge",
+      "train_rows": 17750,
+      "test_pos": 344,
+      "test_neg": 1941,
+      "linear": {
+        "tpr_fpr1": 1.0,
+        "tpr_fpr01": 1.0,
+        "auroc": 0.9999850233037394
+      },
+      "regex": {
+        "tpr": 0.0,
+        "fpr": 0.0
+      }
+    },
+    {
+      "name": "suite/banking",
+      "train_rows": 22329,
+      "test_pos": 1182,
+      "test_neg": 834,
+      "linear": {
+        "tpr_fpr1": 0.9966159052453468,
+        "tpr_fpr01": 0.7808798646362098,
+        "auroc": 0.9995932188259544
+      },
+      "regex": {
+        "tpr": 0.03807106598984772,
+        "fpr": 0.0
+      }
+    },
+    {
+      "name": "suite/slack",
+      "train_rows": 23201,
+      "test_pos": 549,
+      "test_neg": 595,
+      "linear": {
+        "tpr_fpr1": 0.8925318761384335,
+        "tpr_fpr01": 0.5591985428051002,
+        "auroc": 0.9959345486828611
+      },
+      "regex": {
+        "tpr": 0.04553734061930783,
+        "fpr": 0.0
+      }
+    },
+    {
+      "name": "suite/travel",
+      "train_rows": 21420,
+      "test_pos": 912,
+      "test_neg": 2013,
+      "linear": {
+        "tpr_fpr1": 0.9342105263157895,
+        "tpr_fpr01": 0.6896929824561403,
+        "auroc": 0.9966609581579383
+      },
+      "regex": {
+        "tpr": 0.17434210526315788,
+        "fpr": 0.0
+      }
+    },
+    {
+      "name": "suite/workspace",
+      "train_rows": 14988,
+      "test_pos": 3598,
+      "test_neg": 5759,
+      "linear": {
+        "tpr_fpr1": 0.8849360755975542,
+        "tpr_fpr01": 0.7912729294052251,
+        "auroc": 0.991453693911292
+      },
+      "regex": {
+        "tpr": 0.0339077265147304,
+        "fpr": 0.0
+      }
+    }
+  ]
+}
