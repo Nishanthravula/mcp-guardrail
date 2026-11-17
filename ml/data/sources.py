@@ -26,6 +26,9 @@ LOCAL_EXTENSIONS = (".md", ".json", ".ts", ".js")
 LOCAL_MAX_FILES = 40
 LOCAL_MAX_CHARS = 20_000
 LOCAL_MAX_BYTES = 1_000_000
+# Benign local text is read only from these packages, so adding a development
+# dependency later does not change the dataset or the published numbers.
+LOCAL_PACKAGES_FILE = Path(__file__).with_name("local-packages.txt")
 
 # Matching an injection inside a tool result has to survive YAML/JSON
 # re-rendering (re-wrapped lines, doubled quotes), so both sides are compared
@@ -155,10 +158,17 @@ def _packages(node_modules: Path):
             yield entry.name, entry
 
 
-def load_local(node_modules: Path) -> list[Row]:
+def pinned_local_packages() -> list[str]:
+    return [line.strip() for line in LOCAL_PACKAGES_FILE.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def load_local(node_modules: Path, packages: list[str] | None = None) -> list[Row]:
     """Benign text files, as a filesystem MCP server would return them."""
+    allowed = set(packages) if packages is not None else None
     rows: list[Row] = []
     for name, pkg in _packages(Path(node_modules)):
+        if allowed is not None and name not in allowed:
+            continue
         files = [
             p
             for p in sorted(pkg.rglob("*"))
@@ -217,7 +227,9 @@ def build(cache: Path, node_modules: Path) -> list[Row]:
     from ml.data.synthetic import generate
 
     return dedupe(
-        load_agentdojo(paths["agentdojo"]) + load_injecagent(paths["injecagent"]) + load_local(node_modules) + generate()
+        load_agentdojo(paths["agentdojo"]) + load_injecagent(paths["injecagent"])
+        + load_local(node_modules, pinned_local_packages())
+        + generate()
     )
 
 
