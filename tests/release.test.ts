@@ -74,3 +74,23 @@ test("release checks fail when the README results block is empty or missing", ()
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("encoder and Prompt Guard figures join the README table once they exist", () => {
+  const dir = copyRepo();
+  const resultsPath = path.join(dir, "docs/benchmarks/results.json");
+  const results = JSON.parse(fs.readFileSync(resultsPath, "utf8"));
+  for (const p of results.protocols) {
+    if (p.name.startsWith("lodo/")) {
+      p.encoder = { tpr_fpr1: 0.912, tpr_fpr01: 0.8, auroc: 0.99, base_model: "x", scored_with: "y" };
+      p.promptguard = { tpr_fpr1: 0.205, tpr_fpr01: 0.1, auroc: 0.7, model: "z" };
+    }
+  }
+  fs.writeFileSync(resultsPath, JSON.stringify(results));
+  assert.equal(check(dir).status, 1, "stale table must fail");
+  assert.equal(check(dir, "--write").status, 0);
+  assert.equal(check(dir).status, 0);
+  const readme = fs.readFileSync(path.join(dir, "README.md"), "utf8");
+  assert.match(readme, /\| Transformer \(optional\) at 1% \| Prompt Guard 2 at 1% \|/);
+  assert.match(readme, /\| 91\.2% \| 20\.5% \|/);
+  fs.rmSync(dir, { recursive: true, force: true });
+});

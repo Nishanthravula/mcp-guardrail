@@ -37,6 +37,7 @@ class OnnxScorer:
         if hashlib.sha256(blob).hexdigest() != self.meta["sha256"]:
             raise ValueError(f"{d}: model.onnx failed its checksum")
         self.tokenizer = PreTrainedTokenizerFast.from_pretrained(str(d))
+        self.tokenizer.model_max_length = 10**9  # texts are windowed, never truncated
         opts = ort.SessionOptions()
         opts.intra_op_num_threads = 1  # deterministic summation order
         self.session = ort.InferenceSession(blob, opts, providers=["CPUExecutionProvider"])

@@ -36,17 +36,25 @@ const results = JSON.parse(read("docs/benchmarks/results.json"));
 const meta = JSON.parse(read(`${MODEL}.json`));
 
 const blocks = {
-  results: [
-    "| Dataset never seen in training | Attacks | Benign | Detected at 1% false positives | Detected at 0.1% | Keyword rules detect |",
-    "|---|---|---|---|---|---|",
-    ...results.protocols
-      .filter((p) => p.name in NAMES)
-      .map(
+  results: (() => {
+    const held = results.protocols.filter((p) => p.name in NAMES);
+    // Optional columns appear only once the maintainer's GPU run has produced them.
+    const extra = [
+      ["encoder", "Transformer (optional) at 1%"],
+      ["promptguard", "Prompt Guard 2 at 1%"],
+    ].filter(([key]) => held.some((p) => p[key]));
+    return [
+      "| Dataset never seen in training | Attacks | Benign | Detected at 1% false positives | Detected at 0.1% | Keyword rules detect |" +
+        extra.map(([, title]) => ` ${title} |`).join(""),
+      "|---|---|---|---|---|---|" + "---|".repeat(extra.length),
+      ...held.map(
         (p) =>
           `| ${NAMES[p.name]} | ${p.test_pos.toLocaleString("en-US")} | ${p.test_neg.toLocaleString("en-US")} ` +
-          `| ${pct(p.linear.tpr_fpr1)} | ${pct(p.linear.tpr_fpr01)} | ${pct(p.regex.tpr)} |`,
+          `| ${pct(p.linear.tpr_fpr1)} | ${pct(p.linear.tpr_fpr01)} | ${pct(p.regex.tpr)} |` +
+          extra.map(([key]) => ` ${p[key] ? pct(p[key].tpr_fpr1) : "–"} |`).join(""),
       ),
-  ].join("\n"),
+    ].join("\n");
+  })(),
   model: [
     `- Default threshold: ${meta.thresholds.default}`,
     `- Grouped ${meta.cv.folds}-fold cross-validation at that threshold: ${pct(meta.cv.detected_at_default)} of ` +
