@@ -6,7 +6,7 @@
 | **Project** | mcp-guardrail (`@nishanthravula/mcp-guardrail`) |
 | **Author** | Nishanth Ravula |
 | **Status** | Approved |
-| **Version** | 1.0 |
+| **Version** | 1.1 |
 | **Created** | 2026-11-17 |
 | **Target release** | 0.4.0 |
 | **Parent** | MCPG-DD-001, section 6.1 (tier 2) and milestone M7 |
@@ -17,6 +17,7 @@
 | Version | Date | Author | Summary |
 |---|---|---|---|
 | 1.0 | 2026-11-17 | N. Ravula | Design approved in review: ModernBERT-base, `onnxruntime-node` with `@huggingface/tokenizers` |
+| 1.1 | 2026-11-17 | N. Ravula | Built. Added section 10, recording where the implementation differs from this design |
 
 Requirement keywords follow RFC 2119, as in MCPG-DD-001.
 
@@ -140,3 +141,16 @@ GPU inference in the proxy, and models other than ModernBERT-base.
 | Asynchronous output reorders or loses messages | Ordering test with many concurrent calls; existing end-to-end suite unchanged |
 | Start-up slowed by hashing a large model file | Measured and documented |
 | The encoder is not better than the linear model | Reported as measured; the linear model stays the default |
+
+## 10. Implementation Record
+
+| Area | Design | As built | Reason |
+|---|---|---|---|
+| ONNX export | Not specified | TorchScript exporter (`dynamo=False`), opset 17 | The dynamo exporter's graph failed ONNX Runtime shape inference after quantisation in a trial |
+| Benchmark scoring (section 7) | The shipped model | PyTorch on the GPU, before quantisation; the build records the largest ONNX–PyTorch difference on the calibration rows | Scoring about 13,000 rows on a Colab CPU is too slow |
+| Calibration split | 10% grouped | Whole groups in a fixed checksum order until at least 10% of rows, including some benign rows, are held back | Guarantees benign rows to set thresholds from, however groups are sized |
+| Message processing (section 6) | Ordered chain | Strictly one message at a time; an unexpected internal error exits the proxy with code 1 instead of forwarding a possibly unredacted line | Simplest way to guarantee order; matches the previous crash behaviour |
+| Benign source (NFR-24) | Rebuild identically | Local text read only from the 105 packages in `ml/data/local-packages.txt` | Installing the two dev packages added 15 packages to `node_modules`, which would have changed the dataset |
+| Test model | Tiny ModernBERT | Three layers with global attention every third layer, like ModernBERT-base's mix of global and sliding-window layers | Exercises the sliding-window path in export and inference |
+
+Not yet done: the GPU training run, publishing the model, and the encoder and Prompt Guard 2 figures.

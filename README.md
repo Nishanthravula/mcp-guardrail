@@ -91,6 +91,8 @@ It is a small built-in classifier that runs in plain TypeScript: no dependency, 
 | AgentDojo | 6,241 | 7,596 | 90.0% | 79.6% | 5.6% |
 <!-- results:end -->
 
+An optional fine-tuned transformer model can be used instead (`--injection-model <dir>`); its training pipeline is ready, and its accuracy will appear in this table once it has been trained.
+
 It is a probabilistic extra layer, not a guarantee. It misses translated, encoded and politely indirect attacks, and it flags some emails and policy text written for people. Per-tool modes, thresholds, measured limits and how to reproduce every number: [docs/injection-detection.md](docs/injection-detection.md). Model details: [MODEL_CARD.md](MODEL_CARD.md).
 
 ## CLI
@@ -108,6 +110,7 @@ mcp-guardrail check-config <file>                validate a config file
   --detect-injection[=report|block]
                         flag tool results that look like prompt injections
   --injection-threshold P  flag at or above score P (0-1)
+  --injection-model DIR    use an optional transformer model (see docs)
   --dry-run             report what would be redacted or blocked; change nothing
   --audit-log <file>    append a JSONL audit log (never contains values)
   --quiet               no stderr logs

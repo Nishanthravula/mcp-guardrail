@@ -2,7 +2,7 @@
   "backend": "tokenizers",
   "cls_token": "[CLS]",
   "mask_token": "[MASK]",
-  "model_max_length": 512,
+  "model_max_length": 1000000000,
   "pad_token": "[PAD]",
   "sep_token": "[SEP]",
   "tokenizer_class": "TokenizersBackend",

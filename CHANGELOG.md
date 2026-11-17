@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+Optional transformer detector.
+
+### Added
+- **`--injection-model <dir>`** (or `"injection": { "model": "<dir>" }`): score tool results with a fine-tuned ModernBERT-base model exported to int8 ONNX. Needs the optional packages `onnxruntime-node` and `@huggingface/tokenizers`; the package still has no runtime dependencies. The built-in model stays the default.
+- **Training pipeline** (`ml/encoder/`) and a Colab notebook (`notebooks/train_encoder.ipynb`): fine-tune, benchmark on the held-out datasets (optionally against Prompt Guard 2), calibrate thresholds on held-back data, export and check in Node.
+- **`injection-error` audit event** when a result cannot be scored; `block` mode withholds such items, `report` mode forwards them.
+- Library: `EncoderDetector`, `loadScorer`, `tokenWindows`, `Scorer`.
+
+### Changed
+- The proxy writes server output through an ordered asynchronous queue. Message order is unchanged; with the built-in model behaviour is unchanged.
+- The benign text used for training is read from a pinned list of packages (`ml/data/local-packages.txt`), so adding development dependencies no longer changes the dataset.
+
+### Notes
+- No accuracy is claimed for the transformer model until its benchmark run has been committed.
+
 ## 0.3.0
 
 Prompt-injection detection for tool results.

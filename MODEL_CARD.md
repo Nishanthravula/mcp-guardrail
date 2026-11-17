@@ -91,3 +91,38 @@ See "Reproducing the numbers" in
 [docs/injection-detection.md](docs/injection-detection.md#reproducing-the-numbers).
 A model with different feature settings must ship under a new name; the
 loader rejects a weights file whose metadata does not match the code.
+
+---
+
+# Model card: injection-modernbert-v1 (optional, not yet trained)
+
+| | |
+|---|---|
+| Task | Same as above |
+| Base model | `answerdotai/ModernBERT-base` (Apache-2.0), fine-tuned for two classes |
+| Input | Normalised text, tokenised and scored in windows of 510 tokens with stride 255 |
+| Output | Highest class-1 probability over the windows |
+| Files | `model.onnx` (int8, dynamic quantisation), tokenizer files, `guardrail.json` |
+| Runtime | `onnxruntime-node` and `@huggingface/tokenizers` (optional packages) |
+
+## Training procedure
+
+- Same rows as `injection-linear-v1`. A window is an attack example when it
+  holds at least 16 tokens of an injection (or all of a shorter one); windows
+  with a smaller overlap are left out; at most 8 benign windows per row.
+- One epoch, AdamW (learning rate 3e-5, weight decay 0.01), linear warm-up and
+  decay, class-weighted cross-entropy, batch size 16, mixed precision.
+- About 10% of the data, chosen as whole groups, is held back. Thresholds come
+  from benign scores on that part, measured with the exported int8 ONNX model.
+  `guardrail.json` also records the largest difference between ONNX and
+  PyTorch scores on it.
+
+## Evaluation
+
+Leave-one-dataset-out, the same splits as the linear model. Those runs score
+with the PyTorch model on the GPU (before int8 quantisation), because scoring
+about 13,000 rows on a Colab CPU is too slow; the difference quantisation
+makes is measured during calibration and recorded.
+
+Results: not yet produced. They will appear in the tables above and in
+[docs/benchmarks/RESULTS.md](docs/benchmarks/RESULTS.md) after the training run.

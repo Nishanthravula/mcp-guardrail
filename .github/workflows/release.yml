@@ -29,6 +29,8 @@ jobs:
       # Trusted publishing needs npm >= 11.5.1.
       - run: npm install -g npm@11
       - run: npm ci
+        env:
+          ONNXRUNTIME_NODE_INSTALL: skip
       - name: Release tag must match package.json version
         run: |
           version="v$(node -p 'require("./package.json").version')"

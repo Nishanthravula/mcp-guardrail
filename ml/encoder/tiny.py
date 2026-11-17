@@ -26,7 +26,7 @@ def build_tokenizer(texts, vocab_size: int = 600):
     )
     return PreTrainedTokenizerFast(
         tokenizer_object=tok, unk_token="[UNK]", cls_token="[CLS]", sep_token="[SEP]",
-        pad_token="[PAD]", mask_token="[MASK]", model_max_length=512,
+        pad_token="[PAD]", mask_token="[MASK]", model_max_length=10**9,  # texts are windowed, never truncated
     )
 
 

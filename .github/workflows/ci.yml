@@ -4,6 +4,11 @@ on:
     branches: [main]
   pull_request:
 
+# onnxruntime-node (an optional dev dependency) would otherwise download GPU
+# libraries on install; its CPU build is bundled and is all the tests need.
+env:
+  ONNXRUNTIME_NODE_INSTALL: skip
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -35,12 +40,26 @@ jobs:
           grep -h -E -A8 "^not ok|^✖|^\s+✖" unit.log e2e.log 2>/dev/null | head -80 | sed 's/^/::error::/' || true
 
   ml:
-    # Training and evaluation code. Does not download datasets.
+    # Training, export and evaluation code, including the transformer pipeline
+    # on a tiny CPU model. Does not download datasets or pretrained models.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install -r ml/requirements.txt
+      - run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - run: pip install -r ml/requirements.txt -r ml/requirements-encoder.txt
       - run: python -m pytest ml -q
+      - name: The committed tiny test model is reproducible
+        run: |
+          python -m ml.encoder.make_fixture --out /tmp/encoder-tiny
+          python - <<'PY'
+          import json
+          a = json.load(open("tests/fixtures/encoder-tiny/golden.json"))["cases"]
+          b = json.load(open("/tmp/encoder-tiny/golden.json"))["cases"]
+          assert [c["ids"] for c in a] == [c["ids"] for c in b], "token ids differ"
+          worst = max(abs(x["score"] - y["score"]) for x, y in zip(a, b))
+          assert worst < 1e-3, f"scores differ by {worst}"
+          print("fixture reproduced; largest score difference", worst)
+          PY

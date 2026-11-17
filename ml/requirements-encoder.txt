@@ -1,0 +1,8 @@
+# Extra requirements for the optional transformer detector (ml/encoder).
+# Install PyTorch first for your platform; see https://pytorch.org.
+torch>=2.4,<3
+transformers>=4.48
+tokenizers>=0.20
+onnx>=1.16
+onnxruntime>=1.18
+huggingface_hub>=0.25
