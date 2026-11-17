@@ -1,0 +1,18 @@
+{
+  "format": 1,
+  "kind": "encoder",
+  "name": "encoder-tiny-test",
+  "baseModel": "tiny (test only)",
+  "maxLength": 128,
+  "stride": 63,
+  "clsId": 1,
+  "sepId": 2,
+  "padId": 3,
+  "thresholds": {
+    "fpr1": 0.5,
+    "fpr01": 0.6,
+    "default": 0.5
+  },
+  "sha256": "b2a1567ad4799d6c176c79baa0586d88e1b2689562308cd82b7f5c6de7dbf465",
+  "data": {}
+}

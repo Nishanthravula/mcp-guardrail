@@ -35,11 +35,13 @@ def build_model(tokenizer, seed: int = 0):
     from transformers import ModernBertConfig, ModernBertForSequenceClassification
 
     cfg = ModernBertConfig(
-        vocab_size=len(tokenizer), hidden_size=32, intermediate_size=64, num_hidden_layers=2,
+        vocab_size=len(tokenizer), hidden_size=32, intermediate_size=64, num_hidden_layers=3,
         num_attention_heads=2, max_position_embeddings=512, num_labels=2,
         pad_token_id=tokenizer.pad_token_id, cls_token_id=tokenizer.cls_token_id,
         sep_token_id=tokenizer.sep_token_id, bos_token_id=tokenizer.cls_token_id,
-        eos_token_id=tokenizer.sep_token_id, global_attn_every_n_layers=1, local_attention=128,
+        eos_token_id=tokenizer.sep_token_id,
+        # As in ModernBERT-base: one global-attention layer, then sliding-window layers.
+        global_attn_every_n_layers=3, local_attention=128,
     )
     torch.manual_seed(seed)
     return ModernBertForSequenceClassification._from_config(cfg, attn_implementation="sdpa")
