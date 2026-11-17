@@ -161,3 +161,10 @@ test("injection: threshold must be strictly between 0 and 1", () => {
   }
   assert.equal(validateConfig({ injection: { threshold: 0.99 } }).injection?.threshold, 0.99);
 });
+
+test("injection.model accepts a directory or builtin and rejects other types", () => {
+  assert.equal(validateConfig({ injection: { model: "./models/injection-modernbert-v1" } }).injection?.model, "./models/injection-modernbert-v1");
+  assert.equal(validateConfig({ injection: { model: "builtin" } }).injection?.model, "builtin");
+  assert.throws(() => validateConfig({ injection: { model: 3 } }), /"model"/);
+  assert.throws(() => validateConfig({ injection: { model: "" } }), /"model"/);
+});

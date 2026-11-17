@@ -39,6 +39,15 @@ export type AuditEvent =
       action: "report" | "block";
       truncated: boolean;
     }
+  | {
+      /** A tool result could not be scored. Contains the error message, never the text. */
+      event: "injection-error";
+      tool?: string;
+      id?: string | number;
+      path: string;
+      action: "report" | "block";
+      error: string;
+    }
   | { event: "stop"; exitCode: number };
 
 export class AuditLog {

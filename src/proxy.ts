@@ -3,7 +3,8 @@ import { constants as osConstants } from "node:os";
 import { Sanitizer, SanitizerOptions, RedactionDetail } from "./sanitizer.js";
 import { AuditLog } from "./audit.js";
 import type { InjectionMode, ToolPolicy } from "./config.js";
-import { InjectionDetector } from "./injection/detector.js";
+import { InjectionDetector, type InjectionResult } from "./injection/detector.js";
+import type { Scorer } from "./injection/scorer.js";
 import { VERSION } from "./version.js";
 
 export interface ProxyOptions extends SanitizerOptions {
@@ -33,7 +34,12 @@ export interface ProxyOptions extends SanitizerOptions {
   /** Per-tool policies, keyed by MCP tool name. */
   tools?: Record<string, ToolPolicy>;
   /** Detect prompt injections in tool results. Off unless a mode is given here or per tool. */
-  injection?: { mode: InjectionMode; threshold?: number };
+  injection?: {
+    mode: InjectionMode;
+    threshold?: number;
+    /** A loaded scorer (e.g. a transformer model). Without one, the built-in model is used. */
+    scorer?: Scorer;
+  };
   /**
    * Report what would be redacted or blocked, but forward everything
    * unchanged. For trying the guardrail out before trusting it.
@@ -108,7 +114,9 @@ export class GuardrailProxy {
   private placeholderPrefix: string;
   private pendingTools = new Map<string, string>();
   private audit: AuditLog | null;
-  private detector: InjectionDetector | null = null;
+  private detector: Scorer | null = null;
+  /** Server output is written strictly in order, even when scoring is asynchronous. */
+  private toClientChain: Promise<void> = Promise.resolve();
 
   constructor(options: ProxyOptions) {
     this.opts = {
@@ -128,7 +136,7 @@ export class GuardrailProxy {
     // mid-session, if it is missing or corrupted.
     const modes = [options.injection?.mode, ...Object.values(options.tools ?? {}).map((p) => p.injection)];
     if (modes.some((m) => m === "report" || m === "block")) {
-      this.detector = new InjectionDetector({ threshold: options.injection?.threshold });
+      this.detector = options.injection?.scorer ?? new InjectionDetector({ threshold: options.injection?.threshold });
     }
     for (const [name, policy] of Object.entries(options.tools ?? {})) {
       if (!policy.skip && policy.disable?.length) {
@@ -195,23 +203,40 @@ export class GuardrailProxy {
 
     // server → client (this is what lands in the LLM context)
     child.stdout?.on("data", (chunk: Buffer) => {
-      toClient.push(chunk, (line) => this.writeToClient(this.processServerLine(line)));
+      toClient.push(chunk, (line) => this.enqueueServerLine(line));
     });
 
     // 'close' fires only after the server's stdout is fully drained, so the
     // final response is never cut off.
     child.on("close", (code, signal) => {
-      toClient.flush((line) => this.writeToClient(this.processServerLine(line)));
+      toClient.flush((line) => this.enqueueServerLine(line));
       const exitCode =
         code ?? (signal ? 128 + (osConstants.signals[signal as NodeJS.Signals] ?? 0) : 0);
-      this.audit?.write({ event: "stop", exitCode });
-      this.audit?.close();
-      process.stdout.write("", () => process.exit(exitCode));
+      // Results still being scored are written before exiting.
+      void this.toClientChain.then(() => {
+        this.audit?.write({ event: "stop", exitCode });
+        this.audit?.close();
+        process.stdout.write("", () => process.exit(exitCode));
+      });
     });
 
     for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
       process.on(sig, () => child.kill(sig));
     }
+  }
+
+  private enqueueServerLine(line: string): void {
+    this.toClientChain = this.toClientChain
+      .then(() => this.processServerLine(line))
+      .then(
+        (out) => this.writeToClient(out),
+        (err: Error) => {
+          // Never forward a line we failed to process: it may be unredacted.
+          process.stderr.write(`mcp-guardrail: internal error while processing a server message: ${err.stack ?? err}\n`);
+          this.audit?.close();
+          process.exit(1);
+        },
+      );
   }
 
   private writeToClient(line: string): void {
@@ -336,7 +361,7 @@ export class GuardrailProxy {
 
   // ---------------------------------------------------------------- server → client
 
-  private processServerLine(line: string): string {
+  private async processServerLine(line: string): Promise<string> {
     let msg: unknown;
     try {
       msg = JSON.parse(line);
@@ -357,22 +382,24 @@ export class GuardrailProxy {
     }
     const msgs = Array.isArray(msg) ? msg : [msg];
     let changed = false;
-    const out = msgs.map((m) => {
-      if (!isObject(m)) {
-        const r = this.sanitizer.sanitize(m);
-        if (r.redactions.length) changed = true;
-        return r.value;
-      }
-      const s = this.sanitizeEnvelope(m);
-      if (s !== m) changed = true;
-      return s;
-    });
+    const out = await Promise.all(
+      msgs.map(async (m) => {
+        if (!isObject(m)) {
+          const r = this.sanitizer.sanitize(m);
+          if (r.redactions.length) changed = true;
+          return r.value;
+        }
+        const s = await this.sanitizeEnvelope(m);
+        if (s !== m) changed = true;
+        return s;
+      }),
+    );
     if (this.opts.dryRun || !changed) return line;
     return JSON.stringify(Array.isArray(msg) ? out : out[0]);
   }
 
   /** Sanitize everything except jsonrpc / id / method. Returns `m` itself if nothing changed. */
-  private sanitizeEnvelope(m: JsonObject): JsonObject {
+  private async sanitizeEnvelope(m: JsonObject): Promise<JsonObject> {
     const tool = typeof m.method === "string" ? undefined : this.untrack(m.id);
     const policy = tool ? this.opts.tools?.[tool] : undefined;
     if (policy?.skip) return m;
@@ -386,7 +413,7 @@ export class GuardrailProxy {
     let clean: JsonObject = redacted ? value : body;
     const mode = tool ? (policy?.injection ?? this.opts.injection?.mode ?? "off") : "off";
     if (tool && mode !== "off" && this.detector && isObject(clean.result)) {
-      const screened = this.screenResult(clean.result, tool, m.id, mode);
+      const screened = await this.screenResult(clean.result, tool, m.id, mode);
       if (screened !== clean.result) clean = { ...clean, result: screened };
     }
     if (!redacted && clean === body) return m;
@@ -416,34 +443,19 @@ export class GuardrailProxy {
    * Score every text item of a tool result. Logs each suspected injection
    * (location and score only, never the text) and, in block mode, returns a
    * copy with the flagged items replaced by a notice. Returns `result` itself
-   * when nothing is withheld.
+   * when nothing is withheld. An item that cannot be scored is withheld in
+   * block mode and forwarded in report mode.
    */
-  private screenResult(result: JsonObject, tool: string, id: unknown, mode: "report" | "block"): JsonObject {
+  private async screenResult(
+    result: JsonObject,
+    tool: string,
+    id: unknown,
+    mode: "report" | "block",
+  ): Promise<JsonObject> {
     const detector = this.detector!;
-    const flagged: { keys: (string | number)[]; score: number }[] = [];
+    const items: { keys: (string | number)[]; text: string }[] = [];
     const visit = (text: unknown, keys: (string | number)[]) => {
-      if (typeof text !== "string" || text === "") return;
-      const r = detector.score(text);
-      if (!r.flagged) return;
-      flagged.push({ keys, score: r.score });
-      const path = "result" + keys.map((k) => (typeof k === "number" ? `[${k}]` : `.${k}`)).join("");
-      const shown = r.score.toFixed(2);
-      const withhold = mode === "block";
-      this.log(
-        `tools/call (${tool}): injection suspected at ${path} (score ${shown})` +
-          (withhold ? (this.opts.dryRun ? " — would withhold" : " — withheld") : ""),
-      );
-      this.audit?.write({
-        event: this.opts.dryRun ? "would-injection" : "injection",
-        tool,
-        id: id as string | number | undefined,
-        path,
-        score: Math.round(r.score * 1000) / 1000,
-        threshold: detector.threshold,
-        model: detector.modelName,
-        action: mode,
-        truncated: r.truncated,
-      });
+      if (typeof text === "string" && text !== "") items.push({ keys, text });
     };
     const walk = (v: unknown, keys: (string | number)[]) => {
       if (typeof v === "string") visit(v, keys);
@@ -462,14 +474,54 @@ export class GuardrailProxy {
     }
     walk(result.structuredContent, ["structuredContent"]);
 
-    if (mode !== "block" || this.opts.dryRun || flagged.length === 0) return result;
+    const outcomes = await Promise.all(
+      items.map(async ({ text }): Promise<InjectionResult | Error> => {
+        try {
+          return await detector.score(text);
+        } catch (err) {
+          return err instanceof Error ? err : new Error(String(err));
+        }
+      }),
+    );
+
+    const withhold = mode === "block" && !this.opts.dryRun;
+    const suffix = mode === "block" ? (this.opts.dryRun ? " — would withhold" : " — withheld") : "";
+    const replace: { keys: (string | number)[]; notice: string }[] = [];
+    items.forEach(({ keys }, i) => {
+      const r = outcomes[i];
+      const path = "result" + keys.map((k) => (typeof k === "number" ? `[${k}]` : `.${k}`)).join("");
+      const common = { tool, id: id as string | number | undefined, path, action: mode };
+      if (r instanceof Error) {
+        const error = r.message.split("\n")[0];
+        this.log(`tools/call (${tool}): could not check ${path} for prompt injection (${error})${suffix}`);
+        this.audit?.write({ event: "injection-error", ...common, error });
+        replace.push({ keys, notice: "[mcp-guardrail: withheld — this tool result could not be checked for prompt injection.]" });
+        return;
+      }
+      if (!r.flagged) return;
+      this.log(`tools/call (${tool}): injection suspected at ${path} (score ${r.score.toFixed(2)})${suffix}`);
+      this.audit?.write({
+        event: this.opts.dryRun ? "would-injection" : "injection",
+        ...common,
+        score: Math.round(r.score * 1000) / 1000,
+        threshold: detector.threshold,
+        model: detector.modelName,
+        truncated: r.truncated,
+      });
+      replace.push({
+        keys,
+        notice:
+          `[mcp-guardrail: withheld — this tool result looks like a prompt injection (score ${r.score.toFixed(2)}). ` +
+          "Run with --dry-run to inspect.]",
+      });
+    });
+
+    if (!withhold || replace.length === 0) return result;
     const copy = structuredClone(result);
-    for (const { keys, score } of flagged) {
+    for (const { keys, notice } of replace) {
       let node: any = copy;
       for (const k of keys.slice(0, -1)) node = node[k];
-      node[keys[keys.length - 1]] =
-        `[mcp-guardrail: withheld — this tool result looks like a prompt injection (score ${score.toFixed(2)}). ` +
-        "Run with --dry-run to inspect.]";
+      node[keys[keys.length - 1]] = notice;
     }
     return copy;
   }
