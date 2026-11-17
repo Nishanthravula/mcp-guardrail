@@ -16,7 +16,8 @@ export interface InjectionResult {
   /** Highest window probability, 0 to 1. */
   score: number;
   flagged: boolean;
-  /** Byte offset, in the normalised text, of the highest-scoring window. */
+  /** Where the highest-scoring window starts: a byte offset in the normalised text for the
+   *  built-in model, a token index for a transformer model. */
   windowStart: number;
   /** True when the item exceeded the size cap and only its two ends were scored. */
   truncated: boolean;

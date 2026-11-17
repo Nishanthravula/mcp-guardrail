@@ -49,9 +49,11 @@
     "check:release": "node scripts/check-release.mjs"
   },
   "devDependencies": {
+    "@huggingface/tokenizers": "^0.2.0",
     "@modelcontextprotocol/sdk": "^1.32.2",
     "@modelcontextprotocol/server-filesystem": "^2.2.0",
     "@types/node": "^22.0.0",
+    "onnxruntime-node": "^1.31.1",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0"
   },
@@ -65,5 +67,17 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "peerDependencies": {
+    "@huggingface/tokenizers": "^0.2.0",
+    "onnxruntime-node": ">=1.20.0 <2"
+  },
+  "peerDependenciesMeta": {
+    "@huggingface/tokenizers": {
+      "optional": true
+    },
+    "onnxruntime-node": {
+      "optional": true
+    }
   }
 }
