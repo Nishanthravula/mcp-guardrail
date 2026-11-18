@@ -10,7 +10,7 @@ their code is executed: they are read as JSON and text only.
 |---|---|---|---|
 | [AgentDojo](https://github.com/ethz-spylab/agentdojo) `runs/` logs | `089ed468cf3ed0322acc66b0211f26d9d90dbf60` | MIT | Real tool results from logged agent runs. A result is an attack if it contains a string from that run's `injections` map; every other tool result is benign |
 | [InjecAgent](https://github.com/uiuc-kang-lab/InjecAgent) `data/` | `f19c9f2c79a41046eb13c03c51a24c567a8ffa07` | MIT | Attacks: `Tool Response` of the base and enhanced test cases. Benign: `attacker_simulated_responses.json` |
-| Local text files | pinned by `package-lock.json` | per package | Benign only: up to 40 `.md`, `.json`, `.ts` and `.js` files per package under `node_modules/`, each cut to 20,000 characters, as a filesystem MCP server would return them |
+| Local text files | pinned by `package-lock.json` | per package | Benign only: up to 40 `.md`, `.json`, `.ts` and `.js` files per package under `node_modules/`, each cut to 20,000 characters, as a filesystem MCP server would return them. Only the 105 packages listed in `local-packages.txt` are read, so new development dependencies do not change the dataset |
 | Synthetic (`ml/data/synthetic.py`) | this repository | MIT | Training only. Attacks: 30 generic openers combined with 30 actions, placed in 10 kinds of carrier text. Benign: instruction-like sentences addressed to people, and sentences that describe injection attacks. Never used as test data |
 
 ## Row schema

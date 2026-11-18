@@ -18,6 +18,9 @@ export {
 } from "./config.js";
 export type { GuardrailConfig, CustomRuleConfig, ToolPolicy, InjectionConfig, InjectionMode } from "./config.js";
 export { InjectionDetector } from "./injection/detector.js";
+export { EncoderDetector, tokenWindows } from "./injection/encoder.js";
+export { loadScorer } from "./injection/scorer.js";
+export type { Scorer } from "./injection/scorer.js";
 export type { InjectionResult, InjectionDetectorOptions } from "./injection/detector.js";
 export { scanText, scanPaths } from "./scan.js";
 export type { ScanFinding, ScanReport } from "./scan.js";

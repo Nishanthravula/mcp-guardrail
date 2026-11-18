@@ -114,16 +114,25 @@ def evaluate_split(rows, feats, baseline, train_idx, test_idx) -> dict:
     }
 
 
+def _cell(metrics: dict | None) -> str:
+    return f"{metrics['tpr_fpr1']:.1%}" if metrics else "–"
+
+
 def results_table(results: dict) -> str:
+    protocols = results["protocols"]
+    extra = [(key, title) for key, title in (("encoder", "Encoder at 1% FP"), ("promptguard", "Prompt Guard 2 at 1% FP"))
+             if any(key in p for p in protocols)]
     lines = [
-        "| Held out | Attacks | Benign | Detected at 1% FP | Detected at 0.1% FP | AUROC | Keyword rules: detected | Keyword rules: FP |",
-        "|---|---|---|---|---|---|---|---|",
+        "| Held out | Attacks | Benign | Detected at 1% FP | Detected at 0.1% FP | AUROC | Keyword rules: detected | Keyword rules: FP |"
+        + "".join(f" {title} |" for _, title in extra),
+        "|---|---|---|---|---|---|---|---|" + "---|" * len(extra),
     ]
-    for p in results["protocols"]:
+    for p in protocols:
         lin, rx = p["linear"], p["regex"]
         lines.append(
             f"| `{p['name']}` | {p['test_pos']} | {p['test_neg']} | {lin['tpr_fpr1']:.1%} | {lin['tpr_fpr01']:.1%} "
             f"| {lin['auroc']:.3f} | {rx['tpr']:.1%} | {rx['fpr']:.1%} |"
+            + "".join(f" {_cell(p.get(key))} |" for key, _ in extra)
         )
     return "\n".join(lines) + "\n"
 
@@ -150,6 +159,27 @@ Benign counts under 1,000 cannot resolve a 0.1% false-positive rate; in those ro
 """
 
 
+ENCODER_NOTE = """
+## Transformer detector
+
+The encoder columns come from `python -m ml.encoder.evaluate`: for each held-out dataset, `{base_model}` is
+fine-tuned from scratch without that dataset and tested on it ({scored_with}). Prompt Guard 2 is scored
+without any training on this data.
+"""
+
+
+def write_report(results: dict, out: Path) -> None:
+    from ml.baseline import PATTERNS
+
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "results.json").write_text(json.dumps(results, indent=2) + "\n", encoding="utf-8")
+    report = REPORT.format(table=results_table(results), rows=f"{results['rows']:,}", n_patterns=len(PATTERNS), **results["data"])
+    enc = next((p["encoder"] for p in results["protocols"] if "encoder" in p), None)
+    if enc:
+        report += ENCODER_NOTE.format(base_model=enc["base_model"], scored_with=enc["scored_with"])
+    (out / "RESULTS.md").write_text(report, encoding="utf-8")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--dataset", type=Path, default=Path("ml/.cache/dataset.jsonl"))
@@ -160,8 +190,6 @@ def main() -> None:
     started = time.time()
     feats = featurize_rows(rows)
     baseline = np.asarray([regex_baseline(r["text"]) for r in rows])
-    from ml.baseline import PATTERNS
-
     out = []
     for name, train_idx, test_idx in protocols(rows):
         result = {"name": name, **evaluate_split(rows, feats, baseline, train_idx, test_idx)}
@@ -175,12 +203,7 @@ def main() -> None:
         "rows": len(rows),
         "protocols": out,
     }
-    args.out.mkdir(parents=True, exist_ok=True)
-    (args.out / "results.json").write_text(json.dumps(results, indent=2) + "\n", encoding="utf-8")
-    (args.out / "RESULTS.md").write_text(
-        REPORT.format(table=results_table(results), rows=f"{len(rows):,}", n_patterns=len(PATTERNS), **results["data"]),
-        encoding="utf-8",
-    )
+    write_report(results, args.out)
 
 
 if __name__ == "__main__":

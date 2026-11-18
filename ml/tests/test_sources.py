@@ -110,3 +110,19 @@ def test_fetch_rejects_wrong_revision(tmp_path, monkeypatch):
     monkeypatch.setattr(subprocess, "run", fake_run)
     with pytest.raises(RuntimeError, match="revision"):
         sources.fetch(tmp_path)
+
+
+def test_local_rows_only_come_from_the_pinned_package_list(tmp_path):
+    nm = tmp_path / "node_modules"
+    for name in ("listed", "added-later", "@scope/listed-too"):
+        (nm / name).mkdir(parents=True)
+        (nm / name / "README.md").write_text(f"readme of {name}")
+    rows = sources.load_local(nm, packages=["listed", "@scope/listed-too"])
+    assert {r["group"] for r in rows} == {"listed", "@scope/listed-too"}
+
+
+def test_pinned_package_list_is_sorted_and_unique():
+    names = sources.pinned_local_packages()
+    assert len(names) == 105
+    assert names == sorted(set(names))
+    assert "onnxruntime-node" not in names

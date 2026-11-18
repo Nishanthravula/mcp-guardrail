@@ -33,6 +33,8 @@ export interface InjectionConfig {
   mode?: InjectionMode;
   /** Flag results scoring at or above this value (0–1). Defaults to the model's own threshold. */
   threshold?: number;
+  /** "builtin" (default) or the directory of an optional transformer model. */
+  model?: string;
 }
 
 export interface ToolPolicy {
@@ -81,7 +83,7 @@ const TOP_KEYS = new Set([
 ]);
 const RULE_KEYS = new Set(["id", "label", "category", "pattern", "flags", "group", "minEntropy"]);
 const TOOL_KEYS = new Set(["skip", "disable", "injection"]);
-const INJECTION_KEYS = new Set(["mode", "threshold"]);
+const INJECTION_KEYS = new Set(["mode", "threshold", "model"]);
 
 const isObj = (v: unknown): v is Record<string, unknown> =>
   v !== null && typeof v === "object" && !Array.isArray(v);
@@ -224,6 +226,10 @@ export function validateConfig(raw: unknown, source = "config"): GuardrailConfig
     expect(
       c.injection.threshold === undefined || isThreshold(c.injection.threshold),
       `${where}: "threshold" must be a number between 0 and 1 (exclusive)`,
+    );
+    expect(
+      c.injection.model === undefined || (typeof c.injection.model === "string" && c.injection.model.length > 0),
+      `${where}: "model" must be "builtin" or the path of a model directory`,
     );
   }
   return c;

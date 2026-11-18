@@ -21,6 +21,7 @@ import {
 } from "./config.js";
 import { scanPaths, formatReport } from "./scan.js";
 import { InjectionDetector } from "./injection/detector.js";
+import { loadScorer, type Scorer } from "./injection/scorer.js";
 import { VERSION } from "./version.js";
 
 const HELP = `mcp-guardrail ${VERSION} — redact secrets and PII from MCP traffic
@@ -41,6 +42,9 @@ Proxy options:
                          also withholds the flagged text (default: report)
   --injection-threshold <p>
                          flag at or above this score, 0–1 (default: the model's own)
+  --injection-model <dir>
+                         score with an optional transformer model in <dir> (needs
+                         onnxruntime-node and @huggingface/tokenizers installed)
   --dry-run              report what would be redacted or blocked; change nothing
   --audit-log <file>     append a JSONL audit log (never contains values)
   --quiet                no stderr logs
@@ -73,6 +77,7 @@ interface Flags {
   quiet?: boolean;
   injectionMode?: InjectionMode;
   injectionThreshold?: number;
+  injectionModel?: string;
   json?: boolean;
   color?: boolean;
   positional: string[];
@@ -116,6 +121,10 @@ function parseFlags(args: string[], mode: "proxy" | "scan"): Flags {
         f.injectionThreshold = p;
         break;
       }
+      case "--injection-model":
+        if (mode === "scan") fail("scan uses the built-in model; --injection-model applies to the proxy only");
+        f.injectionModel = value(++i, a);
+        break;
       case "--dry-run": proxyOnly(); f.dryRun = true; break;
       case "--audit-log": proxyOnly(); f.auditLog = value(++i, a); break;
       case "--quiet": f.quiet = true; break;
@@ -160,10 +169,11 @@ async function resolveConfig(f: Flags): Promise<GuardrailConfig> {
     auditLog: f.auditLog ?? cfg.auditLog,
     quiet: f.quiet ?? cfg.quiet,
     injection:
-      f.injectionMode !== undefined || f.injectionThreshold !== undefined || cfg.injection
+      f.injectionMode !== undefined || f.injectionThreshold !== undefined || f.injectionModel !== undefined || cfg.injection
         ? {
             mode: f.injectionMode ?? cfg.injection?.mode,
             threshold: f.injectionThreshold ?? cfg.injection?.threshold,
+            model: f.injectionModel ?? cfg.injection?.model,
           }
         : undefined,
   };
@@ -201,6 +211,7 @@ async function main(argv: string[]): Promise<void> {
         `  tool policies: ${Object.keys(cfg.tools ?? {}).join(", ") || "none"}\n` +
         `  injection detection: ${cfg.injection?.mode ?? "off"}` +
         (cfg.injection?.threshold !== undefined ? ` (threshold ${cfg.injection.threshold})` : "") +
+        (cfg.injection?.model && cfg.injection.model !== "builtin" ? `, model ${cfg.injection.model}` : "") +
         "\n" +
         (cfg.dryRun ? "  dry run: ON (nothing will be redacted)\n" : "") +
         (cfg.auditLog ? `  audit log: ${cfg.auditLog}\n` : ""),
@@ -227,6 +238,19 @@ async function main(argv: string[]): Promise<void> {
   const f = parseFlags(argv.slice(0, sep), "proxy");
   const cmd = argv.slice(sep + 1);
   const cfg = await resolveConfig(f);
+  // Load the model before starting the server, so a missing package or a bad
+  // model directory stops start-up instead of failing mid-session.
+  const active = [cfg.injection?.mode, ...Object.values(cfg.tools ?? {}).map((p) => p.injection)].some(
+    (m) => m === "report" || m === "block",
+  );
+  let scorer: Scorer | null = null;
+  if (active) {
+    try {
+      scorer = await loadScorer(cfg.injection?.model, cfg.injection?.threshold);
+    } catch (e) {
+      fail((e as Error).message.replace(/^mcp-guardrail: /, ""));
+    }
+  }
   const opts: ProxyOptions = {
     ...sanitizerOptions(cfg),
     command: cmd[0],
@@ -235,7 +259,10 @@ async function main(argv: string[]): Promise<void> {
     blockPlaceholders: !cfg.allowPlaceholders,
     logToStderr: !cfg.quiet,
     tools: cfg.tools,
-    injection: cfg.injection?.mode ? { mode: cfg.injection.mode, threshold: cfg.injection.threshold } : undefined,
+    // A tool can opt in while the global mode is off, so pass the scorer whenever one is loaded.
+    injection: scorer
+      ? { mode: cfg.injection?.mode ?? "off", threshold: cfg.injection?.threshold, scorer }
+      : undefined,
     dryRun: cfg.dryRun,
     auditLog: cfg.auditLog,
   };

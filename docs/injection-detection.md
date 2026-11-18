@@ -105,6 +105,13 @@ Audit log (`--audit-log`):
 
 Neither contains the flagged text. An end-to-end test asserts this.
 
+If a result cannot be scored (only possible with the optional transformer model):
+
+```json
+{"ts":"…","event":"injection-error","tool":"fetch_url","id":8,"path":"result.content[0].text",
+ "action":"block","error":"…"}
+```
+
 ## How it works
 
 The detector is a logistic regression over hashed n-grams (byte 3-, 4- and
@@ -124,6 +131,80 @@ halves of that budget, and the log records `"truncated": true`.
 Cost on the build machine (2 virtual CPUs): about 85 ms per megabyte, and
 under 0.1 ms for a 1 KB result. A test enforces that time grows linearly with
 input size.
+
+## Optional: transformer model
+
+A fine-tuned ModernBERT-base model can replace the built-in one. It is
+expected to catch more paraphrased attacks, at the cost of a larger download
+and slower scoring. It is optional: the package does not depend on it, and
+nothing changes unless you select it.
+
+**Status:** the training pipeline is complete and tested, but the model has not
+been trained yet. Its accuracy is not claimed anywhere until the benchmark
+table below shows a "Transformer" column produced by the training run.
+
+### Install and run
+
+The model needs two packages that are not installed with mcp-guardrail:
+
+```bash
+npm install @nishanthravula/mcp-guardrail onnxruntime-node @huggingface/tokenizers
+npx mcp-guardrail --detect-injection --injection-model ./injection-modernbert-v1 -- <server command...>
+```
+
+With `npx` and no local install, name all three packages:
+
+```bash
+npx -y -p @nishanthravula/mcp-guardrail -p onnxruntime-node -p @huggingface/tokenizers \
+  mcp-guardrail --detect-injection --injection-model ./injection-modernbert-v1 -- <server command...>
+```
+
+Or in the config file: `"injection": { "mode": "report", "model": "./injection-modernbert-v1" }`.
+`"model": "builtin"` (or leaving it out) keeps the built-in model.
+
+A model directory holds `model.onnx` (int8), `tokenizer.json`,
+`tokenizer_config.json` and `guardrail.json` (thresholds, window settings and
+the SHA-256 of `model.onnx`).
+
+### How it differs from the built-in model
+
+| | Built-in | Transformer |
+|---|---|---|
+| Install | none | `onnxruntime-node`, `@huggingface/tokenizers` and the model directory |
+| Windows | 512 bytes, stride 256 | 510 tokens, stride 255 |
+| Start-up | instant | the model file is checksummed and loaded before the server starts |
+| `scan --injection` | yes | no: scan always uses the built-in model |
+
+Both normalise text the same way first, and both cap very long items the same way.
+
+### Start-up and run-time failures
+
+Start-up stops, with exit code 2 and a message naming the fix, if either
+package is missing, a file is missing, `model.onnx` fails its checksum, or
+`guardrail.json` is invalid. The server is not started.
+
+If scoring fails while running, the proxy logs it and keeps going:
+
+| Mode | The item that could not be scored |
+|---|---|
+| `report` | forwarded unchanged |
+| `block` | replaced by `[mcp-guardrail: withheld — this tool result could not be checked for prompt injection.]` |
+| `--dry-run` | forwarded unchanged |
+
+The audit log records an `injection-error` event with the tool, location and
+error message, never the text.
+
+Responses always reach the host in the order the server sent them. Scored
+messages are processed one at a time, so a slow model delays the messages
+behind it rather than reordering them.
+
+### Training it yourself
+
+`notebooks/train_encoder.ipynb` runs on a Colab GPU: it rebuilds the dataset
+(checking it is byte-identical to the one behind the published figures),
+benchmarks the model on the two held-out datasets, trains and calibrates the
+shipped model, checks it in Node and can upload it to Hugging Face. Details:
+[ml/encoder/README.md](../ml/encoder/README.md).
 
 ## Measured accuracy
 

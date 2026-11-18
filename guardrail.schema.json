@@ -156,6 +156,11 @@
           "exclusiveMinimum": 0,
           "exclusiveMaximum": 1,
           "description": "Flag results scoring at or above this value. Defaults to the model's own threshold."
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "description": "\"builtin\" (default) or the directory of an optional transformer model. Requires onnxruntime-node and @huggingface/tokenizers."
         }
       }
     }
