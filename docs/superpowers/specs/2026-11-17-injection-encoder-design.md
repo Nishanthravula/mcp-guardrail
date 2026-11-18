@@ -6,7 +6,7 @@
 | **Project** | mcp-guardrail (`@nishanthravula/mcp-guardrail`) |
 | **Author** | Nishanth Ravula |
 | **Status** | Approved |
-| **Version** | 1.1 |
+| **Version** | 1.2 |
 | **Created** | 2026-11-17 |
 | **Target release** | 0.4.0 |
 | **Parent** | MCPG-DD-001, section 6.1 (tier 2) and milestone M7 |
@@ -18,6 +18,7 @@
 |---|---|---|---|
 | 1.0 | 2026-11-17 | N. Ravula | Design approved in review: ModernBERT-base, `onnxruntime-node` with `@huggingface/tokenizers` |
 | 1.1 | 2026-11-17 | N. Ravula | Built. Added section 10, recording where the implementation differs from this design |
+| 1.2 | 2026-11-18 | N. Ravula | Quantisation changed to 7-bit weights after CI found CPU-dependent scores (section 10) |
 
 Requirement keywords follow RFC 2119, as in MCPG-DD-001.
 
@@ -152,5 +153,7 @@ GPU inference in the proxy, and models other than ModernBERT-base.
 | Message processing (section 6) | Ordered chain | Strictly one message at a time; an unexpected internal error exits the proxy with code 1 instead of forwarding a possibly unredacted line | Simplest way to guarantee order; matches the previous crash behaviour |
 | Benign source (NFR-24) | Rebuild identically | Local text read only from the 105 packages in `ml/data/local-packages.txt` | Installing the two dev packages added 15 packages to `node_modules`, which would have changed the dataset |
 | Test model | Tiny ModernBERT | Three layers with global attention every third layer, like ModernBERT-base's mix of global and sliding-window layers | Exercises the sliding-window path in export and inference |
+
+| Quantisation | int8 dynamic | int8 dynamic with 7-bit weights (`reduce_range`) | After merge, CI runners without VNNI scored the test model up to 0.125 away from the reference: ONNX Runtime's u8×s8 kernels there add pairs of products in 16 bits, which full 8-bit weights can overflow. With weights within ±64 the largest pair sum is 32,640, so overflow is impossible. A test pins the bound, and another checks the committed model's recorded scores on whatever CPU runs CI |
 
 Not yet done: the GPU training run, publishing the model, and the encoder and Prompt Guard 2 figures.
