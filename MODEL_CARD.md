@@ -102,7 +102,7 @@ loader rejects a weights file whose metadata does not match the code.
 | Base model | `answerdotai/ModernBERT-base` (Apache-2.0), fine-tuned for two classes |
 | Input | Normalised text, tokenised and scored in windows of 510 tokens with stride 255 |
 | Output | Highest class-1 probability over the windows |
-| Files | `model.onnx` (int8, dynamic quantisation), tokenizer files, `guardrail.json` |
+| Files | `model.onnx` (int8 dynamic quantisation with 7-bit weights, so scores are the same on CPUs with and without VNNI), tokenizer files, `guardrail.json` |
 | Runtime | `onnxruntime-node` and `@huggingface/tokenizers` (optional packages) |
 
 ## Training procedure

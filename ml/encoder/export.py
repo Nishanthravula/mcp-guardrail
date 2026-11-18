@@ -32,7 +32,10 @@ def export(model, tokenizer, out_dir, *, name: str, base_model: str, max_length:
             dynamic_axes={"input_ids": {0: "batch", 1: "seq"}, "attention_mask": {0: "batch", 1: "seq"}, "logits": {0: "batch"}},
             dynamo=False,
         )
-        quantize_dynamic(str(fp32), str(out / "model.onnx"), weight_type=QuantType.QInt8)
+        # reduce_range: 7-bit weights. ONNX Runtime's int8 kernels on CPUs without
+        # VNNI add pairs of products in 16 bits; full 8-bit weights can overflow
+        # there and silently change scores. 7 bits cannot.
+        quantize_dynamic(str(fp32), str(out / "model.onnx"), weight_type=QuantType.QInt8, reduce_range=True)
         tokenizer.save_pretrained(tmp)
         for f in ("tokenizer.json", "tokenizer_config.json"):
             shutil.copyfile(Path(tmp) / f, out / f)
